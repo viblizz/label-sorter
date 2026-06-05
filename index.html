@@ -308,10 +308,8 @@
 
         /* --- PRINT FIXES --- */
         @media print {
-            /* Removes the Browser URL, Date, and Title headers/footers */
             @page { margin: 0; } 
             
-            /* Hides everything except the labels */
             .no-print { display: none !important; }
             body { background-color: white; margin: 0; }
             #labels-container { margin: 0; padding: 0; max-width: 100%; display: block; }
@@ -325,7 +323,7 @@
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                height: 98vh; /* Forces exact fit so bottom doesn't bleed */
+                height: 98vh;
             }
             canvas { 
                 border: none; 
@@ -441,7 +439,6 @@
             }
         }
 
-        // --- PDF DOWNLOAD OPTIMIZATION ---
         async function downloadCurrentLabels() {
             const { jsPDF } = window.jspdf;
             const canvases = document.querySelectorAll('#labels-container canvas');
@@ -469,7 +466,6 @@
                 for (let i = 0; i < canvases.length; i++) {
                     if (i > 0) pdf.addPage([canvases[i].width, canvases[i].height]);
                     
-                    // Reduced quality to 0.45 to aggressively combat file size bloat
                     const imgData = canvases[i].toDataURL('image/jpeg', 0.45);
                     pdf.addImage(imgData, 'JPEG', 0, 0, canvases[i].width, canvases[i].height);
                 }
@@ -644,7 +640,6 @@
             return { text, items: textContent.items };
         }
 
-        // --- RENDERING OPTIMIZATION ---
         async function renderSortedLabels() {
             if (!currentPdfDoc || processedOrders.length === 0) return;
 
@@ -673,7 +668,6 @@
 
                 const page = await currentPdfDoc.getPage(order.labelPageNum);
                 
-                // Reduced scale to 1.2 to severely limit pixel data weight on database/PDF
                 const scale = 1.2; 
                 const viewport = page.getViewport({ scale });
                 const ctx = canvas.getContext('2d');
@@ -736,30 +730,39 @@
 
       window.cloudFiles = [];
 
+      // --- NEW FEATURE: DATABASE DATA CHUNKING ---
       window.saveFileToStorage = async function(file, companyName = "Unknown Seller", processedDataArray = []) {
         const statusEl = document.getElementById('status');
-        statusEl.textContent = "Encoding PDF to text and saving directly to Database...";
+        statusEl.textContent = "Encoding and sharding PDF for database storage...";
 
         const reader = new FileReader();
         reader.onload = async function(e) {
             const base64PdfString = e.target.result;
-
-            if (base64PdfString.length > 1048487) {
-                statusEl.textContent = "Error: File is too large for database storage. Keep batches smaller.";
-                return;
-            }
+            const CHUNK_SIZE = 800000; // 800KB safe chunk limit
+            const numChunks = Math.ceil(base64PdfString.length / CHUNK_SIZE);
 
             try {
-              await addDoc(collection(db, "orders"), {
+              // 1. Create the main parent document (without the heavy file payload)
+              const orderDocRef = await addDoc(collection(db, "orders"), {
                 name: file.name,
                 companyName: companyName,
                 isPrinted: false,
                 date: new Date().toLocaleString(),
                 timestamp: Date.now(), 
-                fileData: base64PdfString,
-                totalLabels: processedDataArray.length, // SAVES THE TOTAL LABEL COUNT
+                totalLabels: processedDataArray.length, 
+                chunksCount: numChunks, // Tell the system how many pieces to expect later
                 extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown")
               });
+
+              // 2. Slice the file and save the chunks into a sub-folder
+              for (let i = 0; i < numChunks; i++) {
+                  statusEl.textContent = `Saving file chunk ${i+1} of ${numChunks}...`;
+                  const chunkData = base64PdfString.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+                  await addDoc(collection(db, `orders/${orderDocRef.id}/chunks`), {
+                      index: i,
+                      data: chunkData
+                  });
+              }
 
               statusEl.textContent = "Saved to cloud successfully!";
               window.loadHistoryUI(); 
@@ -804,8 +807,8 @@
             const displayCompany = fileDoc.companyName || "Unknown Seller";
             const checkedAttribute = fileDoc.isPrinted ? "checked" : "";
             
-            // RENDERS THE TOTAL LABEL COUNT BADGE
-            const labelCountText = fileDoc.totalLabels ? `🏷️ ${fileDoc.totalLabels} Labels` : `🏷️ ? Labels`;
+            const count = fileDoc.totalLabels || (fileDoc.extractedOrderIds ? fileDoc.extractedOrderIds.length : '?');
+            const labelCountText = `🏷️ ${count} Labels`;
 
             item.innerHTML = `
                 <div class="history-info">
@@ -821,7 +824,7 @@
                         <input type="checkbox" ${checkedAttribute} onchange="toggleCloudPrintStatus('${fileDoc.id}', this.checked)">
                         Done Printing
                     </label>
-                    <a href="${fileDoc.fileData}" download="${fileDoc.name}" class="btn btn-grey btn-small" style="text-decoration:none;">⬇️ Original PDF</a>
+                    <button class="btn btn-grey btn-small" onclick="downloadOriginalCloudFile('${fileDoc.id}', '${fileDoc.name}')">⬇️ Original PDF</button>
                     <button class="btn btn-secondary btn-small" onclick="processStoredFile('${fileDoc.id}', 'print')">Rearrange & Print</button>
                     <button class="btn btn-blue btn-small" onclick="processStoredFile('${fileDoc.id}', 'download')">Rearrange & Download</button>
                     <button class="btn btn-red btn-small" onclick="deleteCloudFile('${fileDoc.id}')">Delete</button>
@@ -839,15 +842,59 @@
         }
       };
 
+      // --- HELPER: Reassemble Chunks to Download Original ---
+      window.downloadOriginalCloudFile = async function(docId, fileName) {
+          const statusEl = document.getElementById('status');
+          statusEl.textContent = "Reassembling original file pieces...";
+          try {
+              // 1. Fetch chunks, but handle legacy files (no chunks) as well
+              const targetFile = window.cloudFiles.find(f => f.id === docId);
+              let fullBase64 = "";
+
+              if (targetFile.fileData) {
+                  // Legacy support: File was saved before chunking feature
+                  fullBase64 = targetFile.fileData;
+              } else {
+                  // New logic: Fetch all pieces and stitch them
+                  const chunksQuery = query(collection(db, `orders/${docId}/chunks`), orderBy("index", "asc"));
+                  const chunksSnapshot = await getDocs(chunksQuery);
+                  chunksSnapshot.forEach(d => { fullBase64 += d.data().data; });
+              }
+
+              // 2. Trigger browser download
+              const a = document.createElement('a');
+              a.href = fullBase64;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              
+              statusEl.textContent = "Original file downloaded!";
+          } catch(e) {
+              console.error(e);
+              statusEl.textContent = "Error downloading original file.";
+          }
+      };
+
+      // --- HELPER: Reassemble Chunks to Print/Download Rearranged ---
       window.processStoredFile = async function(docId, action) {
         const statusEl = document.getElementById('status');
-        statusEl.textContent = "Pulling encoded file from database...";
+        statusEl.textContent = "Stitching file chunks together...";
         
         try {
             const targetFile = window.cloudFiles.find(f => f.id === docId);
             if(!targetFile) throw new Error("File not found in memory");
 
-            const response = await fetch(targetFile.fileData);
+            let fullBase64 = "";
+            if (targetFile.fileData) {
+                fullBase64 = targetFile.fileData;
+            } else {
+                const chunksQuery = query(collection(db, `orders/${docId}/chunks`), orderBy("index", "asc"));
+                const chunksSnapshot = await getDocs(chunksQuery);
+                chunksSnapshot.forEach(d => { fullBase64 += d.data().data; });
+            }
+
+            const response = await fetch(fullBase64);
             const blob = await response.blob();
             
             currentActiveFileName = targetFile.name;
@@ -875,6 +922,12 @@
       window.deleteCloudFile = async function(docId) {
         if(confirm("Confirm permanent removal? This deletes the PDF across all desktops instantly.")) {
           try {
+            // Must delete chunks sub-collection first to prevent orphaned data ghosts
+            const chunksSnapshot = await getDocs(collection(db, `orders/${docId}/chunks`));
+            for(const chunkDoc of chunksSnapshot.docs) {
+                 await deleteDoc(chunkDoc.ref);
+            }
+            // Delete main file
             await deleteDoc(doc(db, "orders", docId));
             window.loadHistoryUI();
           } catch (error) {
