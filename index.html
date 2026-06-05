@@ -730,10 +730,9 @@
 
       window.cloudFiles = [];
 
-      // --- NEW FEATURE: DATABASE DATA CHUNKING ---
       window.saveFileToStorage = async function(file, companyName = "Unknown Seller", processedDataArray = []) {
         const statusEl = document.getElementById('status');
-        statusEl.textContent = "Encoding and sharding PDF for database storage...";
+        statusEl.textContent = "Encoding and prepping high-speed parallel upload...";
 
         const reader = new FileReader();
         reader.onload = async function(e) {
@@ -742,7 +741,7 @@
             const numChunks = Math.ceil(base64PdfString.length / CHUNK_SIZE);
 
             try {
-              // 1. Create the main parent document (without the heavy file payload)
+              // 1. Create the main parent document
               const orderDocRef = await addDoc(collection(db, "orders"), {
                 name: file.name,
                 companyName: companyName,
@@ -750,19 +749,31 @@
                 date: new Date().toLocaleString(),
                 timestamp: Date.now(), 
                 totalLabels: processedDataArray.length, 
-                chunksCount: numChunks, // Tell the system how many pieces to expect later
+                chunksCount: numChunks,
                 extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown")
               });
 
-              // 2. Slice the file and save the chunks into a sub-folder
+              // 2. PARALLEL UPLOAD: Fire all chunks to the server at the exact same time
+              let completedChunks = 0;
+              const uploadPromises = [];
+
               for (let i = 0; i < numChunks; i++) {
-                  statusEl.textContent = `Saving file chunk ${i+1} of ${numChunks}...`;
                   const chunkData = base64PdfString.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-                  await addDoc(collection(db, `orders/${orderDocRef.id}/chunks`), {
+                  
+                  // Start the upload immediately and track its progress without blocking the loop
+                  const uploadTask = addDoc(collection(db, `orders/${orderDocRef.id}/chunks`), {
                       index: i,
                       data: chunkData
+                  }).then(() => {
+                      completedChunks++;
+                      statusEl.textContent = `Rapid syncing: chunk ${completedChunks} of ${numChunks}...`;
                   });
+                  
+                  uploadPromises.push(uploadTask);
               }
+
+              // 3. Wait for all simultaneous uploads to finish
+              await Promise.all(uploadPromises);
 
               statusEl.textContent = "Saved to cloud successfully!";
               window.loadHistoryUI(); 
@@ -842,26 +853,21 @@
         }
       };
 
-      // --- HELPER: Reassemble Chunks to Download Original ---
       window.downloadOriginalCloudFile = async function(docId, fileName) {
           const statusEl = document.getElementById('status');
           statusEl.textContent = "Reassembling original file pieces...";
           try {
-              // 1. Fetch chunks, but handle legacy files (no chunks) as well
               const targetFile = window.cloudFiles.find(f => f.id === docId);
               let fullBase64 = "";
 
               if (targetFile.fileData) {
-                  // Legacy support: File was saved before chunking feature
                   fullBase64 = targetFile.fileData;
               } else {
-                  // New logic: Fetch all pieces and stitch them
                   const chunksQuery = query(collection(db, `orders/${docId}/chunks`), orderBy("index", "asc"));
                   const chunksSnapshot = await getDocs(chunksQuery);
                   chunksSnapshot.forEach(d => { fullBase64 += d.data().data; });
               }
 
-              // 2. Trigger browser download
               const a = document.createElement('a');
               a.href = fullBase64;
               a.download = fileName;
@@ -876,7 +882,6 @@
           }
       };
 
-      // --- HELPER: Reassemble Chunks to Print/Download Rearranged ---
       window.processStoredFile = async function(docId, action) {
         const statusEl = document.getElementById('status');
         statusEl.textContent = "Stitching file chunks together...";
@@ -922,12 +927,10 @@
       window.deleteCloudFile = async function(docId) {
         if(confirm("Confirm permanent removal? This deletes the PDF across all desktops instantly.")) {
           try {
-            // Must delete chunks sub-collection first to prevent orphaned data ghosts
             const chunksSnapshot = await getDocs(collection(db, `orders/${docId}/chunks`));
             for(const chunkDoc of chunksSnapshot.docs) {
                  await deleteDoc(chunkDoc.ref);
             }
-            // Delete main file
             await deleteDoc(doc(db, "orders", docId));
             window.loadHistoryUI();
           } catch (error) {
