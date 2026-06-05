@@ -555,18 +555,34 @@
                         let skus = [];
                         let qtys = [];
 
-                        // 1. First Attempt: Standard SKU (HSN)
-                        const skuRegex = /\(([^)]+)\)\s*HSN/gi;
+                        // 1. FIRST ATTEMPT: New Amazon ASIN format inside the string -> | B0XXXXXXX (SKU) HSN
+                        const newSkuRegex = /\|\s*(?:B[a-zA-Z0-9]{9})\s*([^|]*?)\s*HSN/gi;
                         let skuMatch;
-                        while ((skuMatch = skuRegex.exec(combinedInvoiceText)) !== null) {
-                            skus.push(skuMatch[1].replace(/^\s+|\s+$/g, ''));
-                            let textChunk = combinedInvoiceText.substring(skuRegex.lastIndex, skuRegex.lastIndex + 250);
+                        while ((skuMatch = newSkuRegex.exec(combinedInvoiceText)) !== null) {
+                            // Grabs the exact text and removes any outer parentheses
+                            let rawSku = skuMatch[1].replace(/^\s*\(|\)\s*$/g, '').trim(); 
+                            skus.push(rawSku);
+                            
+                            let textChunk = combinedInvoiceText.substring(newSkuRegex.lastIndex, newSkuRegex.lastIndex + 250);
                             let rupeeQtyMatch = textChunk.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
                             if (rupeeQtyMatch) { qtys.push(rupeeQtyMatch[1].trim()); } 
                             else { qtys.push("1"); }
                         }
 
-                        // 2. Second Attempt for Amazon's new Item Table Format
+                        // 2. SECOND ATTEMPT (Fallback): Old standard SKU (HSN)
+                        if (skus.length === 0) {
+                            const legacySkuRegex = /\(([^)]+)\)\s*HSN/gi;
+                            while ((skuMatch = legacySkuRegex.exec(combinedInvoiceText)) !== null) {
+                                skus.push(skuMatch[1].replace(/^\s+|\s+$/g, ''));
+                                
+                                let textChunk = combinedInvoiceText.substring(legacySkuRegex.lastIndex, legacySkuRegex.lastIndex + 250);
+                                let rupeeQtyMatch = textChunk.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
+                                if (rupeeQtyMatch) { qtys.push(rupeeQtyMatch[1].trim()); } 
+                                else { qtys.push("1"); }
+                            }
+                        }
+
+                        // 3. THIRD ATTEMPT: Amazon's newer Item Table Format (CSV Style)
                         if (skus.length === 0) {
                             const tableRegex = /\d{2,4}-\d{2}-\d{2,4}["']?\s*,\s*["']?([^"'\n\r,]+)["']?/gi;
                             let tableMatch;
@@ -577,12 +593,18 @@
                                 }
                             }
 
-                            // 3. Third Attempt: Hardcoded Fallbacks
-                            if (skus.length === 0) {
-                                const fallbackMatch = combinedInvoiceText.match(/(MASSAGER|HAIR TRIMMER|SPORTING GOODS|WATER DISPENSER)/i);
-                                if (fallbackMatch) skus.push(fallbackMatch[1].trim());
+                            if (skus.length > 0) {
+                                let generalRupeeMatch = combinedInvoiceText.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
+                                if (generalRupeeMatch) qtys.push(generalRupeeMatch[1].trim());
+                                else qtys.push("1");
                             }
+                        }
 
+                        // 4. FOURTH ATTEMPT: Hardcoded Emergency Fallbacks
+                        if (skus.length === 0) {
+                            const fallbackMatch = combinedInvoiceText.match(/(MASSAGER|HAIR TRIMMER|SPORTING GOODS|WATER DISPENSER)/i);
+                            if (fallbackMatch) skus.push(fallbackMatch[1].trim());
+                            
                             if (skus.length > 0) {
                                 let generalRupeeMatch = combinedInvoiceText.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
                                 if (generalRupeeMatch) qtys.push(generalRupeeMatch[1].trim());
@@ -655,9 +677,6 @@
 
             container.innerHTML = '';
 
-            let labelIndex = 1;
-            const totalLabelsCount = sorted.length;
-
             for (const order of sorted) {
                 const card = document.createElement('div');
                 card.className = 'label-card';
@@ -688,7 +707,8 @@
                     renderY = canvas.height * 0.81;
                 }
 
-                const textToInject = `[${labelIndex}/${totalLabelsCount}] QTY: ${order.qty} | ${order.sku}`;
+                // REMOVED THE LABEL COUNT FROM THIS STRING
+                const textToInject = `QTY: ${order.qty} | ${order.sku}`;
 
                 let fontSize = 16;
                 if (textToInject.length > 45) fontSize = 12;
@@ -706,8 +726,6 @@
                                 
                 ctx.fillStyle = "black";
                 ctx.fillText(textToInject, renderX, renderY);
-
-                labelIndex++;
             }
         }
     </script>
