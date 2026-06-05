@@ -621,7 +621,8 @@
                             
                             for (let i = 0; i < skus.length; i++) {
                                 let q = qtys[i] || "1"; 
-                                itemBreakdowns.push(`${skus[i]} (Qty: ${q})`);
+                                // REMOVED the redundant (Qty: X) suffix here!
+                                itemBreakdowns.push(skus[i]);
                                 totalQty += parseInt(q, 10) || 1;
                             }
                             finalSkuString = itemBreakdowns.join(" | "); 
@@ -707,7 +708,6 @@
                     renderY = canvas.height * 0.81;
                 }
 
-                // REMOVED THE LABEL COUNT FROM THIS STRING
                 const textToInject = `QTY: ${order.qty} | ${order.sku}`;
 
                 let fontSize = 16;
