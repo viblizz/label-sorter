@@ -130,7 +130,6 @@
             width: 100%;
         }
 
-        /* Summary Dashboard Box */
         .summary-dashboard {
             max-width: 1100px;
             margin: 20px auto 0;
@@ -162,7 +161,6 @@
             color: #007bff;
         }
 
-        /* Saved Files Section */
         .saved-files-panel {
             max-width: 1100px;
             margin: 20px auto 0;
@@ -242,6 +240,7 @@
             font-size: 12px;
             color: #666;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .company-badge {
@@ -260,6 +259,7 @@
             display: flex;
             gap: 8px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .print-status-wrapper {
@@ -306,31 +306,32 @@
             display: block;
         }
 
-        /* Print Media Queries */
+        /* --- PRINT FIXES --- */
         @media print {
-            .no-print {
-                display: none !important;
+            /* Removes the Browser URL, Date, and Title headers/footers */
+            @page { margin: 0; } 
+            
+            /* Hides everything except the labels */
+            .no-print { display: none !important; }
+            body { background-color: white; margin: 0; }
+            #labels-container { margin: 0; padding: 0; max-width: 100%; display: block; }
+            
+            .label-card { 
+                box-shadow: none; 
+                padding: 0; 
+                margin: 0; 
+                page-break-after: always; 
+                page-break-inside: avoid; 
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 98vh; /* Forces exact fit so bottom doesn't bleed */
             }
-            body {
-                background-color: white;
-            }
-            #labels-container {
-                margin: 0;
-                padding: 0;
-                max-width: 100%;
-                display: block;
-            }
-            .label-card {
-                box-shadow: none;
-                padding: 0;
-                margin: 0;
-                page-break-after: always;
-                page-break-inside: avoid;
-            }
-            canvas {
-                border: none;
-                width: 100% !important;
-                height: auto !important;
+            canvas { 
+                border: none; 
+                max-width: 100% !important; 
+                max-height: 100% !important; 
+                object-fit: contain;
             }
         }
     </style>
@@ -384,16 +385,13 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-        // --- GLOBAL VARIABLES ---
         let processedOrders = [];
         let currentPdfDoc = null;
         let temporaryExtractedCompany = "Unknown Seller";
         let currentActiveFileName = "Amazon_Labels.pdf"; 
 
-        // --- EVENT LISTENERS ---
         document.getElementById('pdf-file').addEventListener('change', handleNewUpload);
         document.getElementById('sort-strategy').addEventListener('change', renderSortedLabels);
-        
         document.getElementById('order-search-input').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') searchForOrder();
         });
@@ -408,15 +406,10 @@
             let companyCounts = {};
             files.forEach(f => {
                 let comp = f.companyName || "Unknown Seller";
-                if(!companyCounts[comp]) {
-                    companyCounts[comp] = { total: 0, printed: 0, pending: 0 };
-                }
+                if(!companyCounts[comp]) companyCounts[comp] = { total: 0, printed: 0, pending: 0 };
                 companyCounts[comp].total++;
-                if(f.isPrinted) {
-                    companyCounts[comp].printed++;
-                } else {
-                    companyCounts[comp].pending++;
-                }
+                if(f.isPrinted) companyCounts[comp].printed++;
+                else companyCounts[comp].pending++;
             });
 
             dashboard.style.display = 'block';
@@ -448,6 +441,7 @@
             }
         }
 
+        // --- PDF DOWNLOAD OPTIMIZATION ---
         async function downloadCurrentLabels() {
             const { jsPDF } = window.jspdf;
             const canvases = document.querySelectorAll('#labels-container canvas');
@@ -458,7 +452,7 @@
                 return;
             }
 
-            statusEl.textContent = "Generating PDF for download... Please wait.";
+            statusEl.textContent = "Generating compressed PDF... Please wait.";
 
             try {
                 const firstCanvas = canvases[0];
@@ -468,13 +462,15 @@
                 const pdf = new jsPDF({
                     orientation: width > height ? 'landscape' : 'portrait',
                     unit: 'px',
-                    format: [width, height]
+                    format: [width, height],
+                    compress: true 
                 });
 
                 for (let i = 0; i < canvases.length; i++) {
                     if (i > 0) pdf.addPage([canvases[i].width, canvases[i].height]);
                     
-                    const imgData = canvases[i].toDataURL('image/jpeg', 1.0);
+                    // Reduced quality to 0.45 to aggressively combat file size bloat
+                    const imgData = canvases[i].toDataURL('image/jpeg', 0.45);
                     pdf.addImage(imgData, 'JPEG', 0, 0, canvases[i].width, canvases[i].height);
                 }
 
@@ -488,9 +484,6 @@
             }
         }
 
-        // ==============================================================================
-        // --- MAIN EXTRACTION ENGINE CODE ---
-        // ==============================================================================
         async function runCoreEngine(fileOrBlob) {
             const statusEl = document.getElementById('status');
             const container = document.getElementById('labels-container');
@@ -517,9 +510,7 @@
                     const isInvoice = /Sold By|Tax Invoice|HSN|Invoice Number/i.test(textData.text) || textData.text.length > 150;
 
                     if (!isInvoice) {
-                        if (currentGroup.labelPageNum !== null) {
-                            groupedOrders.push(currentGroup);
-                        }
+                        if (currentGroup.labelPageNum !== null) groupedOrders.push(currentGroup);
                         currentGroup = { labelPageNum: i, labelTextData: textData, invoicePages: [] };
                     } else {
                         currentGroup.invoicePages.push({ pageNum: i, textData: textData });
@@ -557,60 +548,49 @@
                         }
 
                         const orderIdMatch = combinedInvoiceText.match(/\d{3}-\d{7}-\d{7}/);
-                        if (orderIdMatch) {
-                            orderId = orderIdMatch[0];
-                        }
+                        if (orderIdMatch) orderId = orderIdMatch[0];
 
                         if (buyerName === "Unknown") {
                             const billingMatch = combinedInvoiceText.match(/(?:Billing Address|Shipping Address)\s*:\s*([^\n\r]+)/i);
-                            if (billingMatch) {
-                                buyerName = billingMatch[1].trim();
-                            } else {
-                                buyerName = `Order ID: ${orderId}`;
-                            }
+                            if (billingMatch) buyerName = billingMatch[1].trim();
+                            else buyerName = `Order ID: ${orderId}`;
                         }
 
                         let skus = [];
                         let qtys = [];
 
+                        // 1. First Attempt: Standard SKU (HSN)
                         const skuRegex = /\(([^)]+)\)\s*HSN/gi;
                         let skuMatch;
-                        
                         while ((skuMatch = skuRegex.exec(combinedInvoiceText)) !== null) {
                             skus.push(skuMatch[1].replace(/^\s+|\s+$/g, ''));
                             let textChunk = combinedInvoiceText.substring(skuRegex.lastIndex, skuRegex.lastIndex + 250);
-                            
                             let rupeeQtyMatch = textChunk.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
-                            
-                            if (rupeeQtyMatch) {
-                                qtys.push(rupeeQtyMatch[1].trim());
-                            } else {
-                                let chunkQtyMatch = textChunk.match(/(?:\n|\s|^)["']?(\d{1,4})["']?\s*\n\s*["']?\d+\.\d{2}["']?\s*\n\s*["']?\d+\.?\d*%\s*["']?/i);
-                                if (chunkQtyMatch) {
-                                    qtys.push(chunkQtyMatch[1].trim());
-                                } else {
-                                    let csvMatch = textChunk.match(/,\s*["'](\d{1,4})["']\s*,\s*["']\d+\.\d+["']/);
-                                    if (csvMatch) {
-                                        qtys.push(csvMatch[1].trim());
-                                    } else {
-                                        qtys.push("1"); 
-                                    }
-                                }
-                            }
+                            if (rupeeQtyMatch) { qtys.push(rupeeQtyMatch[1].trim()); } 
+                            else { qtys.push("1"); }
                         }
 
+                        // 2. Second Attempt for Amazon's new Item Table Format
                         if (skus.length === 0) {
-                            const fallbackMatch = combinedInvoiceText.match(/(MASSAGER|HAIR TRIMMER|SPORTING GOODS|WATER DISPENSER)/i);
-                            if (fallbackMatch) {
-                                skus.push(fallbackMatch[1].trim());
-                                
-                                let generalRupeeMatch = combinedInvoiceText.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
-                                if (generalRupeeMatch) {
-                                    qtys.push(generalRupeeMatch[1].trim());
-                                } else {
-                                    let generalQty = combinedInvoiceText.match(/(?:\n|\s|^)["']?(\d{1,4})["']?\s*\n\s*["']?\d+\.\d{2}["']?\s*\n\s*["']?\d+\.?\d*%\s*["']?/i);
-                                    qtys.push(generalQty ? generalQty[1].trim() : "1");
+                            const tableRegex = /\d{2,4}-\d{2}-\d{2,4}["']?\s*,\s*["']?([^"'\n\r,]+)["']?/gi;
+                            let tableMatch;
+                            while ((tableMatch = tableRegex.exec(combinedInvoiceText)) !== null) {
+                                let possibleSku = tableMatch[1].trim();
+                                if (possibleSku && possibleSku.length > 2) {
+                                    skus.push(possibleSku);
                                 }
+                            }
+
+                            // 3. Third Attempt: Hardcoded Fallbacks
+                            if (skus.length === 0) {
+                                const fallbackMatch = combinedInvoiceText.match(/(MASSAGER|HAIR TRIMMER|SPORTING GOODS|WATER DISPENSER)/i);
+                                if (fallbackMatch) skus.push(fallbackMatch[1].trim());
+                            }
+
+                            if (skus.length > 0) {
+                                let generalRupeeMatch = combinedInvoiceText.match(/₹\s*[\d,.]+\s+(?:-?₹\s*[\d,.]+\s+)?(\d{1,4})\s+₹/);
+                                if (generalRupeeMatch) qtys.push(generalRupeeMatch[1].trim());
+                                else qtys.push("1");
                             }
                         }
 
@@ -626,7 +606,6 @@
                                 itemBreakdowns.push(`${skus[i]} (Qty: ${q})`);
                                 totalQty += parseInt(q, 10) || 1;
                             }
-                            
                             finalSkuString = itemBreakdowns.join(" | "); 
                         }
 
@@ -665,6 +644,7 @@
             return { text, items: textContent.items };
         }
 
+        // --- RENDERING OPTIMIZATION ---
         async function renderSortedLabels() {
             if (!currentPdfDoc || processedOrders.length === 0) return;
 
@@ -680,6 +660,9 @@
 
             container.innerHTML = '';
 
+            let labelIndex = 1;
+            const totalLabelsCount = sorted.length;
+
             for (const order of sorted) {
                 const card = document.createElement('div');
                 card.className = 'label-card';
@@ -690,7 +673,8 @@
 
                 const page = await currentPdfDoc.getPage(order.labelPageNum);
                 
-                const scale = 2.5; 
+                // Reduced scale to 1.2 to severely limit pixel data weight on database/PDF
+                const scale = 1.2; 
                 const viewport = page.getViewport({ scale });
                 const ctx = canvas.getContext('2d');
                 
@@ -710,11 +694,11 @@
                     renderY = canvas.height * 0.81;
                 }
 
-                const textToInject = `TOTAL QTY: ${order.qty}  |  ${order.sku}`;
+                const textToInject = `[${labelIndex}/${totalLabelsCount}] QTY: ${order.qty} | ${order.sku}`;
 
-                let fontSize = 14;
-                if (textToInject.length > 40) fontSize = 11;
-                if (textToInject.length > 60) fontSize = 9;
+                let fontSize = 16;
+                if (textToInject.length > 45) fontSize = 12;
+                if (textToInject.length > 65) fontSize = 10;
 
                 ctx.fillStyle = "black";
                 ctx.font = `bold ${fontSize * scale}px Arial`;
@@ -728,6 +712,8 @@
                                 
                 ctx.fillStyle = "black";
                 ctx.fillText(textToInject, renderX, renderY);
+
+                labelIndex++;
             }
         }
     </script>
@@ -736,7 +722,6 @@
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
       import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-      // Production Web Configuration Keys
       const firebaseConfig = {
         apiKey: "AIzaSyAKRuQM3vVwMrLprVYgXtrKucC_NJy-LgI",
         authDomain: "shipping-label-79465.firebaseapp.com",
@@ -749,10 +734,8 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
 
-      // Local runtime holder for active filtering and searches
       window.cloudFiles = [];
 
-      // Cloud Action: Save Uploaded File & Track Target Meta (Base64 DB Method)
       window.saveFileToStorage = async function(file, companyName = "Unknown Seller", processedDataArray = []) {
         const statusEl = document.getElementById('status');
         statusEl.textContent = "Encoding PDF to text and saving directly to Database...";
@@ -761,7 +744,6 @@
         reader.onload = async function(e) {
             const base64PdfString = e.target.result;
 
-            // Check if file exceeds Firestore's 1MB document limit
             if (base64PdfString.length > 1048487) {
                 statusEl.textContent = "Error: File is too large for database storage. Keep batches smaller.";
                 return;
@@ -774,7 +756,8 @@
                 isPrinted: false,
                 date: new Date().toLocaleString(),
                 timestamp: Date.now(), 
-                fileData: base64PdfString, // Storing the file as text inside the database!
+                fileData: base64PdfString,
+                totalLabels: processedDataArray.length, // SAVES THE TOTAL LABEL COUNT
                 extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown")
               });
 
@@ -788,7 +771,6 @@
         reader.readAsDataURL(file);
       };
 
-      // Cloud Action: Get Shared Active Invoices History List
       window.loadHistoryUI = async function() {
         const historyList = document.getElementById('history-list');
         const statusEl = document.getElementById('status');
@@ -821,12 +803,16 @@
             
             const displayCompany = fileDoc.companyName || "Unknown Seller";
             const checkedAttribute = fileDoc.isPrinted ? "checked" : "";
+            
+            // RENDERS THE TOTAL LABEL COUNT BADGE
+            const labelCountText = fileDoc.totalLabels ? `🏷️ ${fileDoc.totalLabels} Labels` : `🏷️ ? Labels`;
 
             item.innerHTML = `
                 <div class="history-info">
                     <span class="history-name">${fileDoc.name}</span>
                     <div class="history-meta-row">
                         <span class="company-badge">🏢 ${displayCompany}</span>
+                        <span class="company-badge" style="background-color: #d1ecf1; color: #0c5460;">${labelCountText}</span>
                         <span class="history-date">${fileDoc.date}</span>
                     </div>
                 </div>
@@ -853,17 +839,14 @@
         }
       };
 
-      // Cloud Action: Interactive File Rearrange Target Loader
       window.processStoredFile = async function(docId, action) {
         const statusEl = document.getElementById('status');
         statusEl.textContent = "Pulling encoded file from database...";
         
         try {
-            // Find the correct file string in our local array
             const targetFile = window.cloudFiles.find(f => f.id === docId);
             if(!targetFile) throw new Error("File not found in memory");
 
-            // Convert Base64 text back into a Blob (PDF File)
             const response = await fetch(targetFile.fileData);
             const blob = await response.blob();
             
@@ -883,14 +866,12 @@
         }
       };
 
-      // Cloud Action: Synchronize Printing Workflow Toggles
       window.toggleCloudPrintStatus = async function(docId, isChecked) {
         const docRef = doc(db, "orders", docId);
         await updateDoc(docRef, { isPrinted: isChecked });
         window.loadHistoryUI();
       };
 
-      // Cloud Action: Purge Record across All Desktop Stations
       window.deleteCloudFile = async function(docId) {
         if(confirm("Confirm permanent removal? This deletes the PDF across all desktops instantly.")) {
           try {
@@ -902,7 +883,6 @@
         }
       };
 
-      // Local Action Helper: Instant Search Filter
       window.searchForOrder = function() {
         const query = document.getElementById('order-search-input').value.trim();
         const resultEl = document.getElementById('search-result');
@@ -930,7 +910,6 @@
         }
       };
 
-      // Initialize system components tracking
       window.loadHistoryUI();
     </script>
 </body>
