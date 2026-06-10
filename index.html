@@ -146,7 +146,6 @@
             font-size: 14px;
             font-weight: bold;
             color: #232f3e;
-            margin-bottom: 8px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -361,7 +360,10 @@
 
     <div class="summary-dashboard no-print" id="summary-dashboard" style="display: none;">
         <div class="summary-card">
-            <div class="summary-title">📈 Batch Printing Summary Overview</div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div class="summary-title" style="margin-bottom: 0;">📈 Batch Printing Summary Overview</div>
+                <button class="btn btn-red btn-small" onclick="deleteAllCloudFiles()" style="padding: 6px 16px; font-size: 13px;">🗑️ Delete All</button>
+            </div>
             <div class="summary-grid" id="summary-grid"></div>
         </div>
     </div>
@@ -394,11 +396,11 @@
             if (e.key === 'Enter') searchForOrder();
         });
 
+        // UPDATED: AGGREGATE TOTAL LABELS ON DASHBOARD
         function calculateSummaryDashboard(files) {
             const dashboard = document.getElementById('summary-dashboard');
             const grid = document.getElementById('summary-grid');
             
-            // Clear existing grid safely
             while (grid.firstChild) {
                 grid.removeChild(grid.firstChild);
             }
@@ -406,7 +408,6 @@
             let totalBatches = files.length;
             let totalPrinted = files.filter(f => f.isPrinted).length;
             
-            // 1. Aggregate the files and total labels
             let companyCounts = {};
             files.forEach(f => {
                 let comp = f.companyName || "Unknown Seller";
@@ -417,7 +418,7 @@
                 }
                 
                 companyCounts[comp].totalFiles++;
-                companyCounts[comp].totalLabels += labelCount; // Sum up the labels
+                companyCounts[comp].totalLabels += labelCount; 
                 
                 if(f.isPrinted) companyCounts[comp].printedFiles++;
                 else companyCounts[comp].pendingFiles++;
@@ -425,7 +426,6 @@
 
             dashboard.style.display = 'block';
 
-            // 2. Render Total Uploaded Files
             const totalUploadedDiv = document.createElement('div');
             totalUploadedDiv.className = 'summary-stat';
             totalUploadedDiv.textContent = 'Total Uploaded Files: ';
@@ -434,7 +434,6 @@
             totalUploadedDiv.appendChild(totalUploadedSpan);
             grid.appendChild(totalUploadedDiv);
 
-            // 3. Render Completed Prints
             const completedPrintsDiv = document.createElement('div');
             completedPrintsDiv.className = 'summary-stat';
             completedPrintsDiv.textContent = 'Completed Prints: ';
@@ -443,7 +442,6 @@
             completedPrintsDiv.appendChild(completedPrintsSpan);
             grid.appendChild(completedPrintsDiv);
 
-            // 4. Render Company Stats dynamically
             Object.keys(companyCounts).forEach(company => {
                 const stats = companyCounts[company];
                 
@@ -452,27 +450,22 @@
                 cleanBlock.style.borderLeft = "2px solid #ccc";
                 cleanBlock.style.paddingLeft = "10px";
                 
-                // Company Name
                 cleanBlock.appendChild(document.createTextNode(`${company} `));
 
-                // Total Labels (Aggregated)
                 const labelsSpan = document.createElement('span');
                 labelsSpan.style.color = '#ff9900'; 
                 labelsSpan.textContent = `(🏷️ ${stats.totalLabels} Labels): `;
                 cleanBlock.appendChild(labelsSpan);
 
-                // Total Files
                 const totalFilesSpan = document.createElement('span');
                 totalFilesSpan.textContent = `${stats.totalFiles} files | `;
                 cleanBlock.appendChild(totalFilesSpan);
 
-                // Printed Files
                 const printedSpan = document.createElement('span');
                 printedSpan.style.color = '#28a745';
                 printedSpan.textContent = `${stats.printedFiles} printed | `;
                 cleanBlock.appendChild(printedSpan);
 
-                // Pending Files
                 const pendingSpan = document.createElement('span');
                 pendingSpan.style.color = '#dc3545';
                 pendingSpan.textContent = `${stats.pendingFiles} pending`;
@@ -614,7 +607,6 @@
                         const newSkuRegex = /\|\s*(?:B[a-zA-Z0-9]{9})\s*([^|]*?)\s*HSN/gi;
                         let skuMatch;
                         while ((skuMatch = newSkuRegex.exec(combinedInvoiceText)) !== null) {
-                            // Grabs the exact text and removes any outer parentheses
                             let rawSku = skuMatch[1].replace(/^\s*\(|\)\s*$/g, '').trim(); 
                             skus.push(rawSku);
                             
@@ -670,14 +662,14 @@
                         let finalSkuString = "UNKNOWN";
                         let totalQty = 1;
 
+                        // UPDATED: LABEL MULTI-ITEM QUANTITIES
                         if (skus.length > 0) {
                             let itemBreakdowns = [];
                             totalQty = 0;
                             
                             for (let i = 0; i < skus.length; i++) {
                                 let q = qtys[i] || "1"; 
-                                // REMOVED the redundant (Qty: X) suffix here!
-                                itemBreakdowns.push(skus[i]);
+                                itemBreakdowns.push(`${skus[i]} (QTY: ${q})`);
                                 totalQty += parseInt(q, 10) || 1;
                             }
                             finalSkuString = itemBreakdowns.join(" | "); 
@@ -765,9 +757,11 @@
 
                 const textToInject = `QTY: ${order.qty} | ${order.sku}`;
 
+                // UPDATED: AUTO-SCALING FONT
                 let fontSize = 16;
                 if (textToInject.length > 45) fontSize = 12;
                 if (textToInject.length > 65) fontSize = 10;
+                if (textToInject.length > 85) fontSize = 8; 
 
                 ctx.fillStyle = "black";
                 ctx.font = `bold ${fontSize * scale}px Arial`;
@@ -810,11 +804,10 @@
         const reader = new FileReader();
         reader.onload = async function(e) {
             const base64PdfString = e.target.result;
-            const CHUNK_SIZE = 800000; // 800KB safe chunk limit
+            const CHUNK_SIZE = 800000; 
             const numChunks = Math.ceil(base64PdfString.length / CHUNK_SIZE);
 
             try {
-              // 1. Create the main parent document
               const orderDocRef = await addDoc(collection(db, "orders"), {
                 name: file.name,
                 companyName: companyName,
@@ -826,14 +819,12 @@
                 extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown")
               });
 
-              // 2. PARALLEL UPLOAD: Fire all chunks to the server at the exact same time
               let completedChunks = 0;
               const uploadPromises = [];
 
               for (let i = 0; i < numChunks; i++) {
                   const chunkData = base64PdfString.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
                   
-                  // Start the upload immediately and track its progress without blocking the loop
                   const uploadTask = addDoc(collection(db, `orders/${orderDocRef.id}/chunks`), {
                       index: i,
                       data: chunkData
@@ -845,7 +836,6 @@
                   uploadPromises.push(uploadTask);
               }
 
-              // 3. Wait for all simultaneous uploads to finish
               await Promise.all(uploadPromises);
 
               statusEl.textContent = "Saved to cloud successfully!";
@@ -1009,6 +999,36 @@
           } catch (error) {
             console.error("Purge Error:", error);
           }
+        }
+      };
+
+      // UPDATED: DELETE ALL CLOUD FILES
+      window.deleteAllCloudFiles = async function() {
+        if (!window.cloudFiles || window.cloudFiles.length === 0) return;
+        
+        if (confirm("⚠️ DANGER: Are you sure you want to permanently delete ALL files across all synced desktops? This action cannot be undone.")) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = "Purging all cloud data... Please wait.";
+            
+            try {
+                const deletePromises = window.cloudFiles.map(async (file) => {
+                    const docId = file.id;
+                    const chunksSnapshot = await getDocs(collection(db, `orders/${docId}/chunks`));
+                    
+                    const chunkDeletes = chunksSnapshot.docs.map(chunkDoc => deleteDoc(chunkDoc.ref));
+                    await Promise.all(chunkDeletes);
+                    
+                    return deleteDoc(doc(db, "orders", docId));
+                });
+
+                await Promise.all(deletePromises);
+                
+                window.loadHistoryUI();
+                statusEl.textContent = "All operational files successfully purged.";
+            } catch (error) {
+                console.error("Global Purge Error:", error);
+                statusEl.textContent = "Error executing global delete protocol.";
+            }
         }
       };
 
