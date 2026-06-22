@@ -84,6 +84,9 @@
         .btn-red { background-color: #dc3545; }
         .btn-red:hover { background-color: #c82333; }
 
+        .btn-green { background-color: #28a745; }
+        .btn-green:hover { background-color: #218838; }
+
         .btn-grey { background-color: #6c757d; color: white; }
         .btn-grey:hover { background-color: #5a6268; }
 
@@ -213,12 +216,19 @@
             border-radius: 6px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             border: 1px solid #eee;
-            transition: opacity 0.2s ease;
+            transition: all 0.3s ease;
         }
         
         .history-item.printed-row {
             border-left: 4px solid #28a745;
             background-color: #fafafa;
+        }
+
+        /* NEW HIGHLIGHT FOR SEARCH MATCHES */
+        .history-item.highlight-match {
+            background-color: #fff9ed;
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(255, 153, 0, 0.3);
         }
 
         .history-info {
@@ -259,6 +269,8 @@
             gap: 8px;
             align-items: center;
             flex-wrap: wrap;
+            flex-shrink: 0; /* FIX: Prevents buttons from squeezing and wrapping onto the next line */
+            justify-content: flex-end;
         }
 
         .print-status-wrapper {
@@ -372,6 +384,7 @@
         <div class="saved-files-header">
             <span>📂 Cloud Saved File History (All Desktops synced)</span>
             <div class="search-box">
+                <button class="btn btn-green btn-small" id="merge-print-btn" style="display: none;" onclick="processMultipleFiles()">📑 Rearrange & Print Selected</button>
                 <input type="text" id="order-search-input" placeholder="🔍 Search Order ID (e.g. 405-1234567...)">
                 <button class="btn btn-blue btn-small" onclick="searchForOrder()">Locate File</button>
             </div>
@@ -392,11 +405,19 @@
 
         document.getElementById('pdf-file').addEventListener('change', handleNewUpload);
         document.getElementById('sort-strategy').addEventListener('change', renderSortedLabels);
+        
+        // Listen for search enter key
         document.getElementById('order-search-input').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') searchForOrder();
         });
 
-        // UPDATED: AGGREGATE TOTAL LABELS ON DASHBOARD
+        // Listen for clearing search input to automatically restore layout
+        document.getElementById('order-search-input').addEventListener('input', function(e) {
+            if (e.target.value.trim() === '') {
+                searchForOrder();
+            }
+        });
+
         function calculateSummaryDashboard(files) {
             const dashboard = document.getElementById('summary-dashboard');
             const grid = document.getElementById('summary-grid');
@@ -528,27 +549,34 @@
             }
         }
 
-        async function runCoreEngine(fileOrBlob) {
+        async function runCoreEngine(fileOrBlob, appendMode = false) {
             const statusEl = document.getElementById('status');
             const container = document.getElementById('labels-container');
-            container.innerHTML = '';
+            
+            if (!appendMode) {
+                container.innerHTML = '';
+                processedOrders = [];
+            }
+            
             statusEl.textContent = "Analyzing PDF structure and linking images to text...";
             
-            temporaryExtractedCompany = "Unknown Seller";
+            if (!appendMode) temporaryExtractedCompany = "Unknown Seller";
             document.getElementById('print-btn').disabled = true;
             document.getElementById('download-btn').disabled = true;
             
             try {
                 const arrayBuffer = await fileOrBlob.arrayBuffer();
-                currentPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                statusEl.textContent = `Processing ${currentPdfDoc.numPages} pages...`;
+                const docInst = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 
-                processedOrders = [];
+                if (!appendMode) currentPdfDoc = docInst; 
+
+                statusEl.textContent = `Processing ${docInst.numPages} pages...`;
+                
                 let groupedOrders = [];
                 let currentGroup = { labelPageNum: null, labelTextData: null, invoicePages: [] };
 
-                for (let i = 1; i <= currentPdfDoc.numPages; i++) {
-                    const page = await currentPdfDoc.getPage(i);
+                for (let i = 1; i <= docInst.numPages; i++) {
+                    const page = await docInst.getPage(i);
                     const textData = await extractTextAndPositions(page);
                     
                     const isInvoice = /Sold By|Tax Invoice|HSN|Invoice Number/i.test(textData.text) || textData.text.length > 150;
@@ -603,7 +631,6 @@
                         let skus = [];
                         let qtys = [];
 
-                        // 1. FIRST ATTEMPT: New Amazon ASIN format inside the string -> | B0XXXXXXX (SKU) HSN
                         const newSkuRegex = /\|\s*(?:B[a-zA-Z0-9]{9})\s*([^|]*?)\s*HSN/gi;
                         let skuMatch;
                         while ((skuMatch = newSkuRegex.exec(combinedInvoiceText)) !== null) {
@@ -616,7 +643,6 @@
                             else { qtys.push("1"); }
                         }
 
-                        // 2. SECOND ATTEMPT (Fallback): Old standard SKU (HSN)
                         if (skus.length === 0) {
                             const legacySkuRegex = /\(([^)]+)\)\s*HSN/gi;
                             while ((skuMatch = legacySkuRegex.exec(combinedInvoiceText)) !== null) {
@@ -629,7 +655,6 @@
                             }
                         }
 
-                        // 3. THIRD ATTEMPT: Amazon's newer Item Table Format (CSV Style)
                         if (skus.length === 0) {
                             const tableRegex = /\d{2,4}-\d{2}-\d{2,4}["']?\s*,\s*["']?([^"'\n\r,]+)["']?/gi;
                             let tableMatch;
@@ -647,7 +672,6 @@
                             }
                         }
 
-                        // 4. FOURTH ATTEMPT: Hardcoded Emergency Fallbacks
                         if (skus.length === 0) {
                             const fallbackMatch = combinedInvoiceText.match(/(MASSAGER|HAIR TRIMMER|SPORTING GOODS|WATER DISPENSER)/i);
                             if (fallbackMatch) skus.push(fallbackMatch[1].trim());
@@ -662,7 +686,6 @@
                         let finalSkuString = "UNKNOWN";
                         let totalQty = 1;
 
-                        // UPDATED: LABEL MULTI-ITEM QUANTITIES
                         if (skus.length > 0) {
                             let itemBreakdowns = [];
                             totalQty = 0;
@@ -680,6 +703,7 @@
                     }
 
                     processedOrders.push({
+                        pdfDoc: docInst, 
                         labelPageNum: group.labelPageNum,
                         buyerName: buyerName,
                         sku: sku,
@@ -689,11 +713,12 @@
                     });
                 }
 
-                statusEl.textContent = `Completed! Mapped and sorted ${processedOrders.length} image labels.`;
-                document.getElementById('print-btn').disabled = false;
-                document.getElementById('download-btn').disabled = false;
-                
-                await renderSortedLabels();
+                if (!appendMode) {
+                    statusEl.textContent = `Completed! Mapped and sorted ${processedOrders.length} image labels.`;
+                    document.getElementById('print-btn').disabled = false;
+                    document.getElementById('download-btn').disabled = false;
+                    await renderSortedLabels();
+                }
 
             } catch (err) {
                 console.error(err);
@@ -711,7 +736,7 @@
         }
 
         async function renderSortedLabels() {
-            if (!currentPdfDoc || processedOrders.length === 0) return;
+            if (processedOrders.length === 0) return;
 
             const strategy = document.getElementById('sort-strategy').value;
             const container = document.getElementById('labels-container');
@@ -733,7 +758,8 @@
                 card.appendChild(canvas);
                 container.appendChild(card);
 
-                const page = await currentPdfDoc.getPage(order.labelPageNum);
+                const docToUse = order.pdfDoc || currentPdfDoc;
+                const page = await docToUse.getPage(order.labelPageNum);
                 
                 const scale = 1.2; 
                 const viewport = page.getViewport({ scale });
@@ -757,7 +783,6 @@
 
                 const textToInject = `QTY: ${order.qty} | ${order.sku}`;
 
-                // UPDATED: AUTO-SCALING FONT
                 let fontSize = 16;
                 if (textToInject.length > 45) fontSize = 12;
                 if (textToInject.length > 65) fontSize = 10;
@@ -796,6 +821,59 @@
       const db = getFirestore(app);
 
       window.cloudFiles = [];
+
+      // SEPARATED RENDER FUNCTION to handle dynamic sorting for searches 
+      window.renderHistoryList = function(filesToRender, highlightIds = []) {
+          const historyList = document.getElementById('history-list');
+          historyList.innerHTML = '';
+          
+          if (filesToRender.length === 0 && window.cloudFiles.length === 0) {
+              historyList.innerHTML = '<div style="font-size: 14px; color: #777;">No files loaded. Process a new shipping batch to begin.</div>';
+              document.getElementById('summary-dashboard').style.display = 'none';
+              return;
+          }
+
+          filesToRender.forEach(fileDoc => {
+              const item = document.createElement('div');
+              let classes = ['history-item'];
+              if (fileDoc.isPrinted) classes.push('printed-row');
+              if (highlightIds.includes(fileDoc.id)) classes.push('highlight-match');
+              item.className = classes.join(' ');
+              
+              const displayCompany = fileDoc.companyName || "Unknown Seller";
+              const checkedAttribute = fileDoc.isPrinted ? "checked" : "";
+              
+              const count = fileDoc.totalLabels || (fileDoc.extractedOrderIds ? fileDoc.extractedOrderIds.length : '?');
+              const labelCountText = `🏷️ ${count} Labels`;
+
+              // Added min-width: 0 to left container to prevent overflowing which caused buttons to wrap
+              item.innerHTML = `
+                  <div style="display: flex; align-items: center; gap: 12px; flex-grow: 1; min-width: 0;">
+                      <input type="checkbox" class="multi-select-pdf" data-docid="${fileDoc.id}" onchange="handleMultiSelect()" style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;">
+                      <div class="history-info" style="min-width: 0;">
+                          <span class="history-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${fileDoc.name}</span>
+                          <div class="history-meta-row">
+                              <span class="company-badge">🏢 ${displayCompany}</span>
+                              <span class="company-badge" style="background-color: #d1ecf1; color: #0c5460;">${labelCountText}</span>
+                              <span class="history-date">${fileDoc.date}</span>
+                          </div>
+                      </div>
+                  </div>
+                  <div class="history-actions">
+                      <label class="print-status-wrapper">
+                          <input type="checkbox" ${checkedAttribute} onchange="toggleCloudPrintStatus('${fileDoc.id}', this.checked)">
+                          Done Printing
+                      </label>
+                      <button class="btn btn-grey btn-small" onclick="downloadOriginalCloudFile('${fileDoc.id}', '${fileDoc.name}')">⬇️ Original PDF</button>
+                      <button class="btn btn-secondary btn-small" onclick="processStoredFile('${fileDoc.id}', 'print')">Rearrange & Print</button>
+                      <button class="btn btn-blue btn-small" onclick="processStoredFile('${fileDoc.id}', 'download')">Rearrange & Download</button>
+                      <button class="btn btn-red btn-small" onclick="deleteCloudFile('${fileDoc.id}')">Delete</button>
+                  </div>
+              `;
+              historyList.appendChild(item);
+          });
+          window.handleMultiSelect(); 
+      };
 
       window.saveFileToStorage = async function(file, companyName = "Unknown Seller", processedDataArray = []) {
         const statusEl = document.getElementById('status');
@@ -862,50 +940,17 @@
             window.cloudFiles.push({ id: doc.id, ...doc.data() });
           });
 
-          historyList.innerHTML = '';
-
-          if (window.cloudFiles.length === 0) {
-            historyList.innerHTML = '<div style="font-size: 14px; color: #777;">No files loaded. Process a new shipping batch to begin.</div>';
-            document.getElementById('summary-dashboard').style.display = 'none';
-            return;
-          }
-
-          if (typeof calculateSummaryDashboard === 'function') {
+          if (typeof calculateSummaryDashboard === 'function' && window.cloudFiles.length > 0) {
              calculateSummaryDashboard(window.cloudFiles);
           }
 
-          window.cloudFiles.forEach(fileDoc => {
-            const item = document.createElement('div');
-            item.className = `history-item ${fileDoc.isPrinted ? 'printed-row' : ''}`;
-            
-            const displayCompany = fileDoc.companyName || "Unknown Seller";
-            const checkedAttribute = fileDoc.isPrinted ? "checked" : "";
-            
-            const count = fileDoc.totalLabels || (fileDoc.extractedOrderIds ? fileDoc.extractedOrderIds.length : '?');
-            const labelCountText = `🏷️ ${count} Labels`;
-
-            item.innerHTML = `
-                <div class="history-info">
-                    <span class="history-name">${fileDoc.name}</span>
-                    <div class="history-meta-row">
-                        <span class="company-badge">🏢 ${displayCompany}</span>
-                        <span class="company-badge" style="background-color: #d1ecf1; color: #0c5460;">${labelCountText}</span>
-                        <span class="history-date">${fileDoc.date}</span>
-                    </div>
-                </div>
-                <div class="history-actions">
-                    <label class="print-status-wrapper">
-                        <input type="checkbox" ${checkedAttribute} onchange="toggleCloudPrintStatus('${fileDoc.id}', this.checked)">
-                        Done Printing
-                    </label>
-                    <button class="btn btn-grey btn-small" onclick="downloadOriginalCloudFile('${fileDoc.id}', '${fileDoc.name}')">⬇️ Original PDF</button>
-                    <button class="btn btn-secondary btn-small" onclick="processStoredFile('${fileDoc.id}', 'print')">Rearrange & Print</button>
-                    <button class="btn btn-blue btn-small" onclick="processStoredFile('${fileDoc.id}', 'download')">Rearrange & Download</button>
-                    <button class="btn btn-red btn-small" onclick="deleteCloudFile('${fileDoc.id}')">Delete</button>
-                </div>
-            `;
-            historyList.appendChild(item);
-          });
+          // Checking if there is an active search, maintain order
+          const currentSearch = document.getElementById('order-search-input').value.trim();
+          if(currentSearch) {
+              window.searchForOrder();
+          } else {
+              window.renderHistoryList(window.cloudFiles);
+          }
           
           if(statusEl.textContent.includes("Syncing") || statusEl.textContent.includes("Waiting") || statusEl.textContent.includes("Saved")) {
              statusEl.textContent = "Cloud connection established. Operational pipeline synced.";
@@ -914,6 +959,67 @@
           console.error("Sync Failure:", error);
           historyList.innerHTML = 'Operational system failed tracking network link request.';
         }
+      };
+
+      window.handleMultiSelect = function() {
+          const checkedBoxes = document.querySelectorAll('.multi-select-pdf:checked');
+          const mergeBtn = document.getElementById('merge-print-btn');
+          if (checkedBoxes.length >= 2) {
+              mergeBtn.style.display = 'inline-block';
+          } else {
+              mergeBtn.style.display = 'none';
+          }
+      };
+
+      window.processMultipleFiles = async function() {
+          const checkedBoxes = document.querySelectorAll('.multi-select-pdf:checked');
+          if (checkedBoxes.length < 2) return;
+
+          const statusEl = document.getElementById('status');
+          const container = document.getElementById('labels-container');
+          
+          document.getElementById('print-btn').disabled = true;
+          document.getElementById('download-btn').disabled = true;
+          container.innerHTML = '<p class="no-print">Downloading and analyzing multiple files...</p>';
+          
+          processedOrders = []; 
+
+          try {
+              for (let i = 0; i < checkedBoxes.length; i++) {
+                  const docId = checkedBoxes[i].dataset.docid;
+                  const targetFile = window.cloudFiles.find(f => f.id === docId);
+
+                  statusEl.textContent = `Merging file ${i + 1} of ${checkedBoxes.length}: ${targetFile.name}...`;
+
+                  let fullBase64 = "";
+                  if (targetFile.fileData) {
+                      fullBase64 = targetFile.fileData;
+                  } else {
+                      const chunksQuery = query(collection(db, `orders/${docId}/chunks`), orderBy("index", "asc"));
+                      const chunksSnapshot = await getDocs(chunksQuery);
+                      chunksSnapshot.forEach(d => { fullBase64 += d.data().data; });
+                  }
+
+                  const response = await fetch(fullBase64);
+                  const blob = await response.blob();
+                  
+                  await runCoreEngine(blob, true); 
+              }
+
+              statusEl.textContent = `Merge Completed! Mapped and sorted ${processedOrders.length} labels from ${checkedBoxes.length} files.`;
+              document.getElementById('print-btn').disabled = false;
+              document.getElementById('download-btn').disabled = false;
+
+              await renderSortedLabels();
+
+              setTimeout(() => {
+                  window.print();
+              }, 1000);
+
+          } catch (err) {
+              console.error(err);
+              statusEl.textContent = "Error merging files. Check the console.";
+          }
       };
 
       window.downloadOriginalCloudFile = async function(docId, fileName) {
@@ -1002,7 +1108,6 @@
         }
       };
 
-      // UPDATED: DELETE ALL CLOUD FILES
       window.deleteAllCloudFiles = async function() {
         if (!window.cloudFiles || window.cloudFiles.length === 0) return;
         
@@ -1038,24 +1143,37 @@
         
         if(!query) { 
             resultEl.innerHTML = ""; 
+            window.renderHistoryList(window.cloudFiles); // Restore to default state
             return; 
         }
         
-        let foundFiles = [];
+        let matchedFiles = [];
+        let unmatchedFiles = [];
+        let matchedIds = [];
+        let matchedNames = [];
+
         if (window.cloudFiles) {
             window.cloudFiles.forEach(f => {
                 if(f.extractedOrderIds && f.extractedOrderIds.includes(query)) {
-                    foundFiles.push(f.name);
+                    matchedFiles.push(f);
+                    matchedIds.push(f.id);
+                    matchedNames.push(f.name);
+                } else {
+                    unmatchedFiles.push(f);
                 }
             });
         }
         
-        if(foundFiles.length > 0) {
+        if(matchedFiles.length > 0) {
             resultEl.style.color = "#28a745";
-            resultEl.innerHTML = `✅ Found in: <strong>${foundFiles.join(', ')}</strong>. Click 'Rearrange' on that target history row below.`;
+            resultEl.innerHTML = `✅ Found in: <strong>${matchedNames.join(', ')}</strong>.`;
+            
+            // Render the matched items FIRST so they pop to the top, followed by the rest
+            window.renderHistoryList([...matchedFiles, ...unmatchedFiles], matchedIds);
         } else {
             resultEl.style.color = "#dc3545";
-            resultEl.innerHTML = `❌ Order ID not located. Confirm character formatting patterns matches standard marketplace parameters.`;
+            resultEl.innerHTML = `❌ Order ID not located. Confirm character formatting matches parameters.`;
+            window.renderHistoryList(window.cloudFiles); // Render default if no match
         }
       };
 
