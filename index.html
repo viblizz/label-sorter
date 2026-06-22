@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="deepblue">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,34 +7,125 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        :root {
-            --primary: #ff9900;
-            --primary-dark: #e68a00;
+        /* =========================================================
+           DYNAMIC BRAND THEMES (Navy, Teal, Vibrant Orange)
+           ========================================================= */
+        :root, [data-theme="light"] {
+            --primary: #FF6B35;          
+            --primary-dark: #e55a25;
+            --primary-light: rgba(255, 107, 53, 0.15);
+            
             --bg: #f4f6f9;
             --surface: #ffffff;
-            --text: #1a1a1a;
+            --surface-hover: #f0f3f7;
+            
+            --text: #081C24;             
+            --text-muted: #5e737e;
+            --border: #d0d7de;
+            
+            --shadow-color: rgba(8, 28, 36, 0.08);
+            --shadow-hover: rgba(8, 28, 36, 0.15);
+            
+            --btn-teal-bg: #0F4C5C;
+            --btn-teal-hover: #0c3e4b;
+            --btn-navy-bg: #081C24;
+            --btn-navy-hover: #051318;
+            
+            --history-bg: #ffffff;
+            --highlight-bg: rgba(255, 107, 53, 0.08);
         }
 
+        [data-theme="dark"] {
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --surface-hover: #2a2a2a;
+            
+            --text: #e0e0e0;
+            --text-muted: #9aa0a6;
+            --border: #333333;
+            
+            --shadow-color: rgba(0, 0, 0, 0.4);
+            --shadow-hover: rgba(0, 0, 0, 0.6);
+            
+            --btn-teal-bg: #0F4C5C;
+            --btn-teal-hover: #166b82;
+            --btn-navy-bg: #2d434d;
+            --btn-navy-hover: #3a5663;
+            
+            --history-bg: #1a1a1a;
+            --highlight-bg: rgba(255, 107, 53, 0.12);
+        }
+
+        [data-theme="deepblue"] {
+            --bg: #081C24;               
+            --surface: #0F4C5C;          
+            --surface-hover: #135b6e;
+            
+            --text: #ffffff;
+            --text-muted: #a1b0b8;
+            --border: #1f5f70;
+            
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --shadow-hover: rgba(0, 0, 0, 0.5);
+            
+            --btn-teal-bg: #166b82;      
+            --btn-teal-hover: #1b819c;
+            --btn-navy-bg: #051318;      
+            --btn-navy-hover: #030b0f;
+            
+            --history-bg: #0b3440;
+            --highlight-bg: rgba(255, 107, 53, 0.15);
+        }
+
+        [data-theme="eyeprotectant"] {
+            --bg: #f4ecd8;
+            --surface: #fdf6e3;
+            --surface-hover: #f2e7cd;
+            
+            --text: #4c4031;
+            --text-muted: #756a5c;
+            --border: #d9ceb2;
+            
+            --shadow-color: rgba(100, 80, 50, 0.08);
+            --shadow-hover: rgba(100, 80, 50, 0.15);
+            
+            --btn-teal-bg: #0F4C5C;
+            --btn-teal-hover: #0c3e4b;
+            --btn-navy-bg: #081C24;
+            --btn-navy-hover: #051318;
+            
+            --history-bg: #fdf6e3;
+            --highlight-bg: rgba(255, 107, 53, 0.1);
+        }
+
+        body[data-font="small"] { --font-size-base: 13px; }
+        body[data-font="medium"] { --font-size-base: 15px; }
+        body[data-font="large"] { --font-size-base: 18px; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             background-color: var(--bg);
             color: var(--text);
+            font-size: var(--font-size-base);
             margin: 0;
             padding: 0;
+            transition: background-color 0.4s ease, color 0.4s ease;
+            -webkit-font-smoothing: antialiased;
         }
 
         .control-panel {
             background-color: var(--surface);
-            padding: 15px 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            padding: 18px 25px;
+            box-shadow: 0 4px 20px var(--shadow-color);
             position: sticky;
             top: 0;
             z-index: 100;
-            border-bottom: 3px solid var(--primary);
+            border-bottom: 4px solid var(--primary);
+            transition: background-color 0.4s ease;
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1150px;
             margin: 0 auto;
             display: flex;
             flex-wrap: wrap;
@@ -42,63 +133,41 @@
             gap: 20px;
         }
 
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+
         h2 {
             margin: 0;
             flex-grow: 1;
-            font-size: 1.3rem;
-            color: #232f3e;
+            font-size: 1.4em;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .settings-group {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            font-size: 0.9em;
+        }
+
+        .settings-group label {
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-right: 6px;
         }
 
         .file-input-wrapper {
             position: relative;
             overflow: hidden;
             display: inline-block;
-        }
-
-        .btn {
-            background-color: var(--primary);
-            color: white;
-            padding: 10px 22px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-            transition: background 0.15s ease;
-        }
-
-        .btn:hover {
-            background-color: var(--primary-dark);
-        }
-
-        .btn-secondary {
-            background-color: #232f3e;
-        }
-        .btn-secondary:hover {
-            background-color: #19222d;
-        }
-
-        .btn-blue { background-color: #007bff; }
-        .btn-blue:hover { background-color: #0056b3; }
-        
-        .btn-red { background-color: #dc3545; }
-        .btn-red:hover { background-color: #c82333; }
-
-        .btn-green { background-color: #28a745; }
-        .btn-green:hover { background-color: #218838; }
-
-        .btn-grey { background-color: #6c757d; color: white; }
-        .btn-grey:hover { background-color: #5a6268; }
-
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 12px;
-            margin-left: 5px;
-        }
-
-        .btn:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
         }
 
         input[type="file"] {
@@ -110,203 +179,279 @@
             cursor: pointer;
         }
 
+        .btn {
+            background-color: var(--primary);
+            color: #ffffff;
+            padding: 0.75em 1.6em;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 6px var(--shadow-color);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px var(--primary-light);
+        }
+
+        .btn:disabled {
+            background-color: var(--border) !important;
+            color: var(--text-muted) !important;
+            cursor: not-allowed !important;
+            box-shadow: none !important;
+            opacity: 0.6;
+            transform: none !important;
+        }
+
+        .btn-teal { background-color: var(--btn-teal-bg); }
+        .btn-teal:hover:not(:disabled) { background-color: var(--btn-teal-hover); box-shadow: 0 6px 15px var(--shadow-hover); }
+
+        .btn-navy { background-color: var(--btn-navy-bg); }
+        .btn-navy:hover:not(:disabled) { background-color: var(--btn-navy-hover); box-shadow: 0 6px 15px var(--shadow-hover); }
+
+        .btn-red { background-color: #dc3545; }
+        .btn-red:hover:not(:disabled) { background-color: #c82333; }
+
+        .btn-outline {
+            background-color: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+        .btn-outline:hover:not(:disabled) { background-color: var(--surface-hover); }
+
+        .btn-small { padding: 0.5em 1em; font-size: 0.85em; }
+
         .options-group {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 500;
+            gap: 10px;
+            font-size: 0.95em;
+            font-weight: 600;
         }
 
-        select {
-            padding: 8px 12px;
-            border-radius: 4px;
-            border: 1px solid #cccccc;
-            background-color: white;
-            font-size: 14px;
+        select, .search-box input[type="text"] {
+            padding: 0.6em 1em;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background-color: var(--surface);
+            color: var(--text);
+            font-size: 0.95em;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        select:focus, .search-box input[type="text"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
+        .search-box input[type="text"] { width: 280px; }
+
+        input[type="checkbox"] {
+            accent-color: var(--primary);
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
         }
 
         #status {
-            font-weight: bold;
-            font-size: 14px;
-            color: #555555;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: var(--primary);
             width: 100%;
+            margin-top: 5px;
         }
 
-        .summary-dashboard {
-            max-width: 1100px;
-            margin: 20px auto 0;
+        .summary-dashboard, .saved-files-panel {
+            max-width: 1150px;
+            margin: 25px auto 0;
             padding: 0 20px;
         }
+
         .summary-card {
-            background: white;
-            padding: 15px 20px;
-            border-radius: 6px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            border-left: 4px solid var(--primary);
+            background: var(--surface);
+            padding: 20px 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            border-left: 5px solid var(--primary);
         }
+
         .summary-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #232f3e;
+            font-size: 0.9em;
+            font-weight: 800;
+            color: var(--text);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
+
         .summary-grid {
             display: flex;
             gap: 30px;
             flex-wrap: wrap;
-            font-size: 13px;
-        }
-        .summary-stat span {
-            font-weight: bold;
-            color: #007bff;
+            font-size: 0.95em;
+            margin-top: 15px;
         }
 
-        .saved-files-panel {
-            max-width: 1100px;
-            margin: 20px auto 0;
-            padding: 0 20px;
+        .summary-stat {
+            background: var(--surface-hover);
+            padding: 8px 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .summary-stat span {
+            font-weight: 700;
+            color: var(--primary);
         }
 
         .saved-files-header {
-            font-size: 1.1rem;
-            margin-bottom: 10px;
-            color: #232f3e;
-            font-weight: bold;
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 5px;
+            font-size: 1.15em;
+            margin-bottom: 15px;
+            color: var(--text);
+            font-weight: 700;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
+        .search-box-container {
+            display: flex; 
+            flex-direction: column; 
+            align-items: flex-end;
+        }
+
         .search-box {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
         }
 
-        .search-box input {
-            padding: 6px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            width: 250px;
-            font-size: 13px;
-        }
-
         #search-result {
-            font-size: 13px;
-            font-weight: bold;
-            margin-bottom: 10px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: inline-block;
         }
 
         .history-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
 
         .history-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: white;
-            padding: 12px 15px;
-            border-radius: 6px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            border: 1px solid #eee;
-            transition: all 0.3s ease;
+            background: var(--history-bg);
+            padding: 16px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px var(--shadow-color);
+            border: 1px solid var(--border);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+        }
+        
+        .history-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px var(--shadow-hover);
         }
         
         .history-item.printed-row {
-            border-left: 4px solid #28a745;
-            background-color: #fafafa;
+            border-left: 5px solid #28a745;
+            opacity: 0.85;
         }
 
-        /* NEW HIGHLIGHT FOR SEARCH MATCHES */
         .history-item.highlight-match {
-            background-color: #fff9ed;
+            background-color: var(--highlight-bg);
             border-color: var(--primary);
-            box-shadow: 0 0 8px rgba(255, 153, 0, 0.3);
+            box-shadow: 0 0 0 1px var(--primary);
         }
 
         .history-info {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
             flex-grow: 1;
         }
 
         .history-name {
-            font-weight: bold;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 1.05em;
+            color: var(--text);
         }
 
         .history-meta-row {
             display: flex;
-            gap: 15px;
-            font-size: 12px;
-            color: #666;
+            gap: 12px;
+            font-size: 0.85em;
+            color: var(--text-muted);
             align-items: center;
             flex-wrap: wrap;
         }
 
         .company-badge {
-            background-color: #e3e6e6;
-            color: #111;
-            padding: 2px 8px;
-            border-radius: 4px;
+            background-color: var(--surface-hover);
+            color: var(--text);
+            padding: 4px 10px;
+            border-radius: 6px;
             font-weight: 600;
+            border: 1px solid var(--border);
         }
 
-        .history-date {
-            color: #777;
-        }
+        .history-date { color: var(--text-muted); font-weight: 500;}
 
         .history-actions {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
             flex-wrap: wrap;
-            flex-shrink: 0; /* FIX: Prevents buttons from squeezing and wrapping onto the next line */
+            flex-shrink: 0; 
             justify-content: flex-end;
         }
 
         .print-status-wrapper {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 13px;
+            gap: 8px;
+            font-size: 0.9em;
             font-weight: 600;
             cursor: pointer;
             user-select: none;
-            background: #f8f9fa;
-            padding: 6px 10px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-        }
-        .print-status-wrapper input {
-            cursor: pointer;
-            margin: 0;
-            width: 16px;
-            height: 16px;
+            background: var(--surface-hover);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            color: var(--text);
+            transition: background 0.2s;
         }
 
         #labels-container {
             max-width: 700px;
-            margin: 30px auto;
+            margin: 40px auto;
             display: flex;
             flex-direction: column;
-            gap: 25px;
+            gap: 30px;
             align-items: center;
         }
 
         .label-card {
-            background: white;
-            padding: 12px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            background: #ffffff; 
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px var(--shadow-color);
             position: relative;
         }
 
@@ -315,14 +460,13 @@
             max-width: 100%;
             height: auto;
             display: block;
+            border-radius: 4px;
         }
 
-        /* --- PRINT FIXES --- */
         @media print {
             @page { margin: 0; } 
-            
             .no-print { display: none !important; }
-            body { background-color: white; margin: 0; }
+            body { background-color: white !important; margin: 0; color: black !important; }
             #labels-container { margin: 0; padding: 0; max-width: 100%; display: block; }
             
             .label-card { 
@@ -336,27 +480,52 @@
                 align-items: center;
                 height: 98vh;
             }
-            canvas { 
-                border: none; 
-                max-width: 100% !important; 
-                max-height: 100% !important; 
-                object-fit: contain;
-            }
+            canvas { border: none; max-width: 100% !important; max-height: 100% !important; object-fit: contain; }
         }
     </style>
 </head>
-<body>
+<body data-font="medium">
 
     <div class="control-panel no-print">
-        <div class="container">
+        <div class="container header-top">
             <h2>📦 Amazon Label Sorter (Cloud Sync)</h2>
+            <div class="settings-group">
+                <div>
+                    <label for="theme-selector">Theme:</label>
+                    <select id="theme-selector">
+                        <option value="deepblue" selected>Basic Theme</option>
+                        <option value="light">White</option>
+                        <option value="dark">Dark</option>
+                        <option value="eyeprotectant">Eye Protectant</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="font-selector">Text Size:</label>
+                    <select id="font-selector">
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="large">Large</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="container" style="justify-content: space-between;">
             
-            <div class="file-input-wrapper">
-                <button class="btn">Select PDF File</button>
-                <input type="file" id="pdf-file" accept="application/pdf" />
+            <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                <div class="file-input-wrapper">
+                    <button class="btn">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                        Select PDF File
+                    </button>
+                    <input type="file" id="pdf-file" accept="application/pdf" />
+                </div>
+
+                <button class="btn btn-navy" id="print-btn" disabled onclick="handleTopAction('print')">🖨️ Print Labels Only</button>
+                <button class="btn btn-teal" id="download-btn" disabled onclick="handleTopAction('download')">⬇️ Download PDF</button>
             </div>
 
-            <div class="options-group">
+            <div class="options-group" style="margin-left: auto;">
                 <label for="sort-strategy">Sort A-Z By:</label>
                 <select id="sort-strategy">
                     <option value="sku">Product SKU</option>
@@ -364,8 +533,6 @@
                 </select>
             </div>
 
-            <button class="btn btn-secondary" id="print-btn" disabled onclick="window.print()">🖨️ Print Labels Only</button>
-            <button class="btn btn-blue" id="download-btn" disabled onclick="downloadCurrentLabels()">⬇️ Download PDF</button>
             <div id="status">Waiting for cloud initialization...</div>
         </div>
     </div>
@@ -373,8 +540,8 @@
     <div class="summary-dashboard no-print" id="summary-dashboard" style="display: none;">
         <div class="summary-card">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                <div class="summary-title" style="margin-bottom: 0;">📈 Batch Printing Summary Overview</div>
-                <button class="btn btn-red btn-small" onclick="deleteAllCloudFiles()" style="padding: 6px 16px; font-size: 13px;">🗑️ Delete All</button>
+                <div class="summary-title">📈 Batch Printing Summary Overview</div>
+                <button class="btn btn-red btn-small" onclick="deleteAllCloudFiles()">🗑️ Delete All</button>
             </div>
             <div class="summary-grid" id="summary-grid"></div>
         </div>
@@ -383,11 +550,22 @@
     <div class="saved-files-panel no-print">
         <div class="saved-files-header">
             <span>📂 Cloud Saved File History (All Desktops synced)</span>
-            <div class="search-box">
-                <button class="btn btn-green btn-small" id="merge-print-btn" style="display: none;" onclick="processMultipleFiles()">📑 Rearrange & Print Selected</button>
-                <input type="text" id="order-search-input" placeholder="🔍 Search Order ID (e.g. 405-1234567...)">
-                <button class="btn btn-blue btn-small" onclick="searchForOrder()">Locate File</button>
+            
+            <div class="search-box-container">
+                <div class="search-box">
+                    <button class="btn btn-small" id="merge-print-btn" style="display: none;" onclick="processMultipleFiles()">📑 Print Selected</button>
+                    
+                    <label style="display:flex; align-items:center; gap:5px; font-size:13px; font-weight:600; color:var(--text); cursor:pointer;">
+                        <input type="checkbox" id="multi-search-cb" onchange="toggleMultiSearch()"> Multi
+                    </label>
+                    <input type="text" id="order-search-input" placeholder="🔍 Search Order ID...">
+                    <button class="btn btn-teal btn-small" onclick="searchForOrder()">Locate</button>
+                </div>
+                <div id="multi-hint" style="display: none; font-size: 11.5px; font-weight: bold; color: var(--primary); margin-top: 6px; padding-right: 75px;">
+                    ⚠️ Use commas (,) to separate multiple Order IDs
+                </div>
             </div>
+            
         </div>
         <div id="search-result"></div>
         <div class="history-list" id="history-list"></div>
@@ -396,26 +574,54 @@
     <div id="labels-container"></div>
 
     <script>
+        /* --- UI SETTINGS CONTROLS WITH MEMORY --- */
+        // Load saved preferences on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('amazon_label_theme');
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+                document.getElementById('theme-selector').value = savedTheme;
+            }
+            
+            const savedFont = localStorage.getItem('amazon_label_font');
+            if (savedFont) {
+                document.body.setAttribute('data-font', savedFont);
+                document.getElementById('font-selector').value = savedFont;
+            }
+        });
+
+        // Save preferences when changed
+        document.getElementById('theme-selector').addEventListener('change', (e) => {
+            const theme = e.target.value;
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('amazon_label_theme', theme); // Save to browser memory
+        });
+
+        document.getElementById('font-selector').addEventListener('change', (e) => {
+            const font = e.target.value;
+            document.body.setAttribute('data-font', font);
+            localStorage.setItem('amazon_label_font', font); // Save to browser memory
+        });
+
+        /* --- PDF PROCESSING CORE --- */
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
         let processedOrders = [];
         let currentPdfDoc = null;
         let temporaryExtractedCompany = "Unknown Seller";
         let currentActiveFileName = "Amazon_Labels.pdf"; 
+        window.cloudFiles = []; 
+        window.activeSearchQueries = [];
 
         document.getElementById('pdf-file').addEventListener('change', handleNewUpload);
         document.getElementById('sort-strategy').addEventListener('change', renderSortedLabels);
         
-        // Listen for search enter key
         document.getElementById('order-search-input').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') searchForOrder();
         });
 
-        // Listen for clearing search input to automatically restore layout
         document.getElementById('order-search-input').addEventListener('input', function(e) {
-            if (e.target.value.trim() === '') {
-                searchForOrder();
-            }
+            if (e.target.value.trim() === '') searchForOrder();
         });
 
         function calculateSummaryDashboard(files) {
@@ -449,7 +655,7 @@
 
             const totalUploadedDiv = document.createElement('div');
             totalUploadedDiv.className = 'summary-stat';
-            totalUploadedDiv.textContent = 'Total Uploaded Files: ';
+            totalUploadedDiv.textContent = 'Uploaded Files: ';
             const totalUploadedSpan = document.createElement('span');
             totalUploadedSpan.textContent = totalBatches;
             totalUploadedDiv.appendChild(totalUploadedSpan);
@@ -465,20 +671,17 @@
 
             Object.keys(companyCounts).forEach(company => {
                 const stats = companyCounts[company];
-                
                 const cleanBlock = document.createElement('div');
                 cleanBlock.className = "summary-stat";
-                cleanBlock.style.borderLeft = "2px solid #ccc";
-                cleanBlock.style.paddingLeft = "10px";
                 
                 cleanBlock.appendChild(document.createTextNode(`${company} `));
 
                 const labelsSpan = document.createElement('span');
-                labelsSpan.style.color = '#ff9900'; 
                 labelsSpan.textContent = `(🏷️ ${stats.totalLabels} Labels): `;
                 cleanBlock.appendChild(labelsSpan);
 
                 const totalFilesSpan = document.createElement('span');
+                totalFilesSpan.style.color = "var(--text)";
                 totalFilesSpan.textContent = `${stats.totalFiles} files | `;
                 cleanBlock.appendChild(totalFilesSpan);
 
@@ -499,6 +702,13 @@
         async function handleNewUpload(e) {
             const file = e.target.files[0];
             if (!file) return;
+
+            // PREVENT DUPLICATE UPLOADS
+            if (window.cloudFiles && window.cloudFiles.some(f => f.name === file.name)) {
+                alert(`Already added! The file "${file.name}" already exists in your history.`);
+                e.target.value = ""; // reset input
+                return;
+            }
             
             currentActiveFileName = file.name;
             await runCoreEngine(file);
@@ -740,7 +950,7 @@
 
             const strategy = document.getElementById('sort-strategy').value;
             const container = document.getElementById('labels-container');
-            container.innerHTML = '<p class="no-print">Arranging and sorting templates...</p>';
+            container.innerHTML = '<p class="no-print" style="color: var(--text-muted); font-weight: 600;">Arranging and sorting templates...</p>';
 
             const sorted = [...processedOrders].sort((a, b) => {
                 let valA = strategy === 'sku' ? a.sku : a.buyerName;
@@ -820,15 +1030,98 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
 
-      window.cloudFiles = [];
+      // OVERRIDDEN TOP ACTION HANDLER (Integrated with Firebase)
+      window.handleTopAction = async function(action) {
+          // IF THERE IS AN ACTIVE SEARCH, ISOLATE AND PRINT/DOWNLOAD ONLY THOSE LABELS
+          if (window.activeSearchQueries && window.activeSearchQueries.length > 0) {
+              const queries = window.activeSearchQueries;
+              const filesToProcess = window.cloudFiles.filter(f => {
+                  if (f.extractedOrderData) return f.extractedOrderData.some(str => queries.includes(str.split('::')[0]));
+                  else if (f.extractedOrderIds) return queries.some(q => f.extractedOrderIds.includes(q));
+                  return false;
+              });
 
-      // SEPARATED RENDER FUNCTION to handle dynamic sorting for searches 
+              if (filesToProcess.length === 0) return;
+
+              const statusEl = document.getElementById('status');
+              const container = document.getElementById('labels-container');
+              document.getElementById('print-btn').disabled = true;
+              document.getElementById('download-btn').disabled = true;
+              container.innerHTML = '<p class="no-print" style="font-weight: 600; color: var(--primary);">Fetching files from cloud and isolating searched labels...</p>';
+              
+              processedOrders = []; 
+
+              try {
+                  for (let i = 0; i < filesToProcess.length; i++) {
+                      const targetFile = filesToProcess[i];
+                      const docId = targetFile.id;
+                      statusEl.textContent = `Extracting ${targetFile.name} (${i + 1}/${filesToProcess.length})...`;
+
+                      let fullBase64 = "";
+                      if (targetFile.fileData) {
+                          fullBase64 = targetFile.fileData;
+                      } else {
+                          const chunksQuery = query(collection(db, `orders/${docId}/chunks`), orderBy("index", "asc"));
+                          const chunksSnapshot = await getDocs(chunksQuery);
+                          chunksSnapshot.forEach(d => { fullBase64 += d.data().data; });
+                      }
+
+                      const response = await fetch(fullBase64);
+                      const blob = await response.blob();
+                      
+                      await runCoreEngine(blob, true); // True means Append Mode
+                  }
+
+                  // ISOLATE ONLY THE SEARCHED ORDERS
+                  processedOrders = processedOrders.filter(o => queries.includes(o.orderId));
+
+                  statusEl.textContent = `Isolated & Sorted ${processedOrders.length} matching labels.`;
+                  document.getElementById('print-btn').disabled = false;
+                  document.getElementById('download-btn').disabled = false;
+
+                  await renderSortedLabels();
+
+                  setTimeout(() => {
+                      if (action === 'print') window.print();
+                      else if (action === 'download') downloadCurrentLabels();
+                  }, 1000);
+
+              } catch (err) {
+                  console.error(err);
+                  statusEl.textContent = "Error extracting files. Check the console.";
+              }
+          } else {
+              // NO SEARCH ACTIVE -> NORMAL PRINT/DOWNLOAD BEHAVIOR
+              if (action === 'print') window.print();
+              else if (action === 'download') downloadCurrentLabels();
+          }
+      };
+
+      // MULTI-SEARCH TOGGLE LOGIC
+      window.toggleMultiSearch = function() {
+          const cb = document.getElementById('multi-search-cb');
+          const input = document.getElementById('order-search-input');
+          const hint = document.getElementById('multi-hint');
+          
+          if (cb.checked) {
+              hint.style.display = 'block';
+          } else {
+              hint.style.display = 'none';
+              // Revert to taking only the 1st ID
+              let val = input.value;
+              if (val.includes(',')) val = val.split(',')[0].trim();
+              input.value = val;
+              searchForOrder();
+          }
+      };
+
+      // RENDER FUNCTION to handle dynamic sorting for searches 
       window.renderHistoryList = function(filesToRender, highlightIds = []) {
           const historyList = document.getElementById('history-list');
           historyList.innerHTML = '';
           
           if (filesToRender.length === 0 && window.cloudFiles.length === 0) {
-              historyList.innerHTML = '<div style="font-size: 14px; color: #777;">No files loaded. Process a new shipping batch to begin.</div>';
+              historyList.innerHTML = '<div style="font-size: 15px; font-weight: 600; color: var(--text-muted); padding: 20px;">No files loaded. Process a new shipping batch to begin.</div>';
               document.getElementById('summary-dashboard').style.display = 'none';
               return;
           }
@@ -846,16 +1139,23 @@
               const count = fileDoc.totalLabels || (fileDoc.extractedOrderIds ? fileDoc.extractedOrderIds.length : '?');
               const labelCountText = `🏷️ ${count} Labels`;
 
-              // Added min-width: 0 to left container to prevent overflowing which caused buttons to wrap
+              // INJECT PAGE NUMBER IF SEARCHED
+              let pageBadge = '';
+              if (highlightIds.includes(fileDoc.id)) {
+                  let pageText = fileDoc._tempMatchedPages ? fileDoc._tempMatchedPages : "N/A (Re-upload PDF to map)";
+                  pageBadge = `<span class="company-badge" style="background-color: var(--highlight-bg); border-color: var(--primary); color: var(--primary);">Page(s): ${pageText}</span>`;
+              }
+
               item.innerHTML = `
-                  <div style="display: flex; align-items: center; gap: 12px; flex-grow: 1; min-width: 0;">
-                      <input type="checkbox" class="multi-select-pdf" data-docid="${fileDoc.id}" onchange="handleMultiSelect()" style="width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;">
+                  <div style="display: flex; align-items: center; gap: 15px; flex-grow: 1; min-width: 0;">
+                      <input type="checkbox" class="multi-select-pdf" data-docid="${fileDoc.id}" onchange="handleMultiSelect()">
                       <div class="history-info" style="min-width: 0;">
                           <span class="history-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${fileDoc.name}</span>
                           <div class="history-meta-row">
                               <span class="company-badge">🏢 ${displayCompany}</span>
-                              <span class="company-badge" style="background-color: #d1ecf1; color: #0c5460;">${labelCountText}</span>
+                              <span class="company-badge" style="background-color: var(--primary-light); border-color: var(--primary); color: var(--text);">${labelCountText}</span>
                               <span class="history-date">${fileDoc.date}</span>
+                              ${pageBadge}
                           </div>
                       </div>
                   </div>
@@ -864,9 +1164,9 @@
                           <input type="checkbox" ${checkedAttribute} onchange="toggleCloudPrintStatus('${fileDoc.id}', this.checked)">
                           Done Printing
                       </label>
-                      <button class="btn btn-grey btn-small" onclick="downloadOriginalCloudFile('${fileDoc.id}', '${fileDoc.name}')">⬇️ Original PDF</button>
-                      <button class="btn btn-secondary btn-small" onclick="processStoredFile('${fileDoc.id}', 'print')">Rearrange & Print</button>
-                      <button class="btn btn-blue btn-small" onclick="processStoredFile('${fileDoc.id}', 'download')">Rearrange & Download</button>
+                      <button class="btn btn-outline btn-small" onclick="downloadOriginalCloudFile('${fileDoc.id}', '${fileDoc.name}')">Original</button>
+                      <button class="btn btn-navy btn-small" onclick="processStoredFile('${fileDoc.id}', 'print')">Print</button>
+                      <button class="btn btn-teal btn-small" onclick="processStoredFile('${fileDoc.id}', 'download')">Download</button>
                       <button class="btn btn-red btn-small" onclick="deleteCloudFile('${fileDoc.id}')">Delete</button>
                   </div>
               `;
@@ -877,7 +1177,7 @@
 
       window.saveFileToStorage = async function(file, companyName = "Unknown Seller", processedDataArray = []) {
         const statusEl = document.getElementById('status');
-        statusEl.textContent = "Encoding and prepping high-speed parallel upload...";
+        statusEl.textContent = "Encoding and prepping high-speed parallel upload to Cloud...";
 
         const reader = new FileReader();
         reader.onload = async function(e) {
@@ -894,6 +1194,8 @@
                 timestamp: Date.now(), 
                 totalLabels: processedDataArray.length, 
                 chunksCount: numChunks,
+                // Saving specific page numbers string format: "ORDERID::PAGENUMBER"
+                extractedOrderData: processedDataArray.map(o => `${o.orderId}::${o.labelPageNum}`),
                 extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown")
               });
 
@@ -929,7 +1231,7 @@
       window.loadHistoryUI = async function() {
         const historyList = document.getElementById('history-list');
         const statusEl = document.getElementById('status');
-        historyList.innerHTML = 'Synchronizing dashboard pipeline view...';
+        historyList.innerHTML = '<span style="color: var(--text-muted);">Synchronizing dashboard pipeline view...</span>';
 
         try {
           const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
@@ -965,7 +1267,7 @@
           const checkedBoxes = document.querySelectorAll('.multi-select-pdf:checked');
           const mergeBtn = document.getElementById('merge-print-btn');
           if (checkedBoxes.length >= 2) {
-              mergeBtn.style.display = 'inline-block';
+              mergeBtn.style.display = 'inline-flex';
           } else {
               mergeBtn.style.display = 'none';
           }
@@ -980,7 +1282,7 @@
           
           document.getElementById('print-btn').disabled = true;
           document.getElementById('download-btn').disabled = true;
-          container.innerHTML = '<p class="no-print">Downloading and analyzing multiple files...</p>';
+          container.innerHTML = '<p class="no-print" style="font-weight: 600; color: var(--primary);">Downloading and analyzing multiple files from Cloud...</p>';
           
           processedOrders = []; 
 
@@ -1138,15 +1440,37 @@
       };
 
       window.searchForOrder = function() {
-        const query = document.getElementById('order-search-input').value.trim();
+        const inputVal = document.getElementById('order-search-input').value;
+        const cb = document.getElementById('multi-search-cb');
         const resultEl = document.getElementById('search-result');
+        const printBtn = document.getElementById('print-btn');
+        const downBtn = document.getElementById('download-btn');
         
-        if(!query) { 
+        if(!inputVal.trim()) { 
             resultEl.innerHTML = ""; 
+            window.activeSearchQueries = [];
+            
+            // Revert top buttons to normal state
+            printBtn.innerHTML = "🖨️ Print Labels Only";
+            downBtn.innerHTML = "⬇️ Download PDF";
+            printBtn.style.backgroundColor = "";
+            printBtn.style.boxShadow = "";
+            printBtn.disabled = processedOrders.length === 0;
+            downBtn.disabled = processedOrders.length === 0;
+            
             window.renderHistoryList(window.cloudFiles); // Restore to default state
             return; 
         }
         
+        // Split specifically by comma if multi is checked
+        let queries = [];
+        if (cb.checked) {
+            queries = inputVal.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+            queries = [inputVal.trim()];
+        }
+        window.activeSearchQueries = queries;
+
         let matchedFiles = [];
         let unmatchedFiles = [];
         let matchedIds = [];
@@ -1154,7 +1478,26 @@
 
         if (window.cloudFiles) {
             window.cloudFiles.forEach(f => {
-                if(f.extractedOrderIds && f.extractedOrderIds.includes(query)) {
+                let hasMatch = false;
+                let matchedPages = [];
+
+                if (f.extractedOrderData) {
+                    f.extractedOrderData.forEach(str => {
+                        const parts = str.split('::');
+                        if (parts.length === 2 && queries.includes(parts[0])) {
+                            hasMatch = true;
+                            matchedPages.push(parts[1]);
+                        }
+                    });
+                } else if (f.extractedOrderIds) {
+                    // Fallback for old history data before this feature was added
+                    if (queries.some(q => f.extractedOrderIds.includes(q))) {
+                        hasMatch = true;
+                    }
+                }
+
+                if (hasMatch) {
+                    f._tempMatchedPages = matchedPages.length > 0 ? [...new Set(matchedPages)].join(', ') : "Unknown";
                     matchedFiles.push(f);
                     matchedIds.push(f.id);
                     matchedNames.push(f.name);
@@ -1165,14 +1508,31 @@
         }
         
         if(matchedFiles.length > 0) {
-            resultEl.style.color = "#28a745";
+            resultEl.style.color = "var(--primary)";
             resultEl.innerHTML = `✅ Found in: <strong>${matchedNames.join(', ')}</strong>.`;
             
+            // HIGHLIGHT THE TOP BUTTONS FOR SPECIFIC PRINTING
+            printBtn.innerHTML = `🖨️ Print Searched (${queries.length})`;
+            downBtn.innerHTML = `⬇️ Download Searched (${queries.length})`;
+            printBtn.style.backgroundColor = "var(--primary)";
+            printBtn.style.boxShadow = "0 0 12px var(--primary-light)";
+            printBtn.disabled = false;
+            downBtn.disabled = false;
+
             // Render the matched items FIRST so they pop to the top, followed by the rest
             window.renderHistoryList([...matchedFiles, ...unmatchedFiles], matchedIds);
         } else {
             resultEl.style.color = "#dc3545";
             resultEl.innerHTML = `❌ Order ID not located. Confirm character formatting matches parameters.`;
+
+            // Reset top buttons to normal state, but disable them since search failed
+            printBtn.innerHTML = "🖨️ Print Labels Only";
+            downBtn.innerHTML = "⬇️ Download PDF";
+            printBtn.style.backgroundColor = "";
+            printBtn.style.boxShadow = "";
+            printBtn.disabled = true;
+            downBtn.disabled = true;
+
             window.renderHistoryList(window.cloudFiles); // Render default if no match
         }
       };
