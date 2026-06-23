@@ -1052,7 +1052,7 @@
     
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-      import { getFirestore, collection, addDoc, getDocs, updateDoc, doc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+      import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
       const firebaseConfig = {
         apiKey: "AIzaSyAKRuQM3vVwMrLprVYgXtrKucC_NJy-LgI",
@@ -1244,9 +1244,7 @@
               }
 
               await Promise.all(uploadPromises);
-
               statusEl.textContent = "Saved to cloud successfully!";
-              window.loadHistoryUI(); 
             } catch (error) {
               console.error("Cloud Error:", error);
               statusEl.textContent = "Error saving asset to cloud. Verify Firestore rules.";
@@ -1255,38 +1253,37 @@
         reader.readAsDataURL(file);
       };
 
-      window.loadHistoryUI = async function() {
+      // UPGRADED: NATIVE MULTI-DEVICE REALTIME ENGINE
+      window.loadHistoryUI = function() {
         const historyList = document.getElementById('history-list');
         const statusEl = document.getElementById('status');
-        historyList.innerHTML = '<span style="color: var(--text-muted);">Synchronizing dashboard pipeline view...</span>';
+        historyList.innerHTML = '<span style="color: var(--text-muted);">Synchronizing multi-device updates...</span>';
 
-        try {
-          const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
-          const querySnapshot = await getDocs(q);
-          
-          window.cloudFiles = [];
-          querySnapshot.forEach((doc) => {
-            window.cloudFiles.push({ id: doc.id, ...doc.data() });
-          });
+        const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
+        
+        // Dynamic live listener across multiple screens simultaneously
+        onSnapshot(q, (querySnapshot) => {
+            window.cloudFiles = [];
+            querySnapshot.forEach((doc) => {
+                window.cloudFiles.push({ id: doc.id, ...doc.data() });
+            });
 
-          if (typeof calculateSummaryDashboard === 'function' && window.cloudFiles.length > 0) {
-             calculateSummaryDashboard(window.cloudFiles);
-          }
+            if (typeof calculateSummaryDashboard === 'function' && window.cloudFiles.length > 0) {
+                 calculateSummaryDashboard(window.cloudFiles);
+            }
 
-          const currentSearch = document.getElementById('order-search-input').value.trim();
-          if(currentSearch) {
-              window.searchForOrder();
-          } else {
-              window.renderHistoryList(window.cloudFiles);
-          }
-          
-          if(statusEl.textContent.includes("Syncing") || statusEl.textContent.includes("Waiting") || statusEl.textContent.includes("Saved")) {
-             statusEl.textContent = "Cloud connection established. Operational pipeline synced.";
-          }
-        } catch (error) {
-          console.error("Sync Failure:", error);
-          historyList.innerHTML = 'Operational system failed tracking network link request.';
-        }
+            const currentSearch = document.getElementById('order-search-input').value.trim();
+            if(currentSearch) {
+                window.searchForOrder();
+            } else {
+                window.renderHistoryList(window.cloudFiles);
+            }
+            
+            statusEl.textContent = "Cloud pipelines fully synchronized across open monitors.";
+        }, (error) => {
+            console.error("Sync Failure:", error);
+            historyList.innerHTML = 'Operational system failed tracking network link request.';
+        });
       };
 
       window.handleMultiSelect = function() {
@@ -1418,7 +1415,6 @@
       window.toggleCloudPrintStatus = async function(docId, isChecked) {
         const docRef = doc(db, "orders", docId);
         await updateDoc(docRef, { isPrinted: isChecked });
-        window.loadHistoryUI();
       };
 
       window.deleteCloudFile = async function(docId) {
@@ -1429,7 +1425,6 @@
                  await deleteDoc(chunkDoc.ref);
             }
             await deleteDoc(doc(db, "orders", docId));
-            window.loadHistoryUI();
           } catch (error) {
             console.error("Purge Error:", error);
           }
@@ -1455,9 +1450,6 @@
                 });
 
                 await Promise.all(deletePromises);
-                
-                window.loadHistoryUI();
-                statusEl.textContent = "All operational files successfully purged.";
             } catch (error) {
                 console.error("Global Purge Error:", error);
                 statusEl.textContent = "Error executing global delete protocol.";
