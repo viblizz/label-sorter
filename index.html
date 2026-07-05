@@ -6,6 +6,7 @@
     <title>Amazon Shipping Labels Sorter & Filter</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         /* =========================================================
            DYNAMIC BRAND THEMES (Navy, Teal, Vibrant Orange)
@@ -57,7 +58,7 @@
         }
 
         [data-theme="deepblue"] {
-            --bg: #081C24;               
+            --bg: #081C24;                
             --surface: #0F4C5C;          
             --surface-hover: #135b6e;
             
@@ -521,6 +522,66 @@
             }
             canvas { border: none; max-width: 100% !important; max-height: 100% !important; object-fit: contain; }
         }
+
+        /* --- PICK LIST MODAL STYLES --- */
+        .picklist-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.65); z-index: 9999;
+            display: none; justify-content: center; align-items: center;
+            backdrop-filter: blur(3px);
+        }
+        .picklist-modal {
+            background: var(--surface); color: var(--text);
+            width: 90%; height: 90%; border-radius: 12px;
+            display: flex; flex-direction: column; overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            border: 1px solid var(--border);
+        }
+        .picklist-header {
+            padding: 15px 25px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--surface-hover);
+        }
+        .picklist-header h3 { margin: 0; font-size: 1.3em; }
+        .picklist-toolbar {
+            padding: 15px 25px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;
+        }
+        .picklist-toggles { display: flex; gap: 10px; }
+        .picklist-toggles button {
+            background: var(--surface); color: var(--text);
+            border: 1px solid var(--border); padding: 8px 16px;
+            border-radius: 6px; cursor: pointer; font-weight: 600;
+        }
+        .picklist-toggles button.active {
+            background: var(--primary); color: #fff; border-color: var(--primary);
+        }
+        .picklist-search input {
+            padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+            background: var(--surface); color: var(--text); width: 250px;
+        }
+        .picklist-body { flex-grow: 1; overflow: auto; padding: 0; background: var(--bg); }
+        .picklist-table { width: 100%; border-collapse: collapse; text-align: left; }
+        .picklist-table th {
+            position: sticky; top: 0; background: var(--surface-hover);
+            border-bottom: 2px solid var(--border); padding: 12px 15px; font-weight: 700;
+            z-index: 10;
+        }
+        .picklist-table td { padding: 12px 15px; border-bottom: 1px solid var(--border); }
+        .picklist-table tbody tr { background: var(--surface); cursor: pointer; transition: background 0.2s; }
+        .picklist-table tbody tr:hover { background: var(--highlight-bg); }
+        .picklist-table tbody tr.expanded-subrow { background: var(--bg); cursor: default; }
+        .picklist-table tbody tr.expanded-subrow:hover { background: var(--bg); }
+        
+        .th-inner { display: flex; flex-direction: column; gap: 6px; }
+        .th-title { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+        .th-title:hover { color: var(--primary); }
+        .col-filter-input {
+            width: 100%; padding: 4px 8px; font-size: 0.85em; border: 1px solid var(--border);
+            border-radius: 4px; background: var(--surface); color: var(--text);
+            box-sizing: border-box; font-weight: normal; cursor: pointer;
+        }
+        .sort-indicator { font-size: 0.8em; color: var(--primary); }
     </style>
 </head>
 <body data-font="medium">
@@ -551,25 +612,33 @@
         
         <div class="container" style="justify-content: space-between;">
             
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; max-width: 700px;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; max-width: 800px;">
                 <div class="file-input-wrapper">
                     <button class="btn">
                         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
                         Select PDF File
                     </button>
-                    <input type="file" id="pdf-file" accept="application/pdf" />
+                    <!-- MULTIPLE FILES ENABLED -->
+                    <input type="file" id="pdf-file" accept="application/pdf" multiple />
                 </div>
 
                 <button class="btn btn-navy" id="print-btn" disabled onclick="handleTopAction('print')">🖨️ Print Labels</button>
                 <button class="btn btn-teal" id="download-btn" disabled onclick="handleTopAction('download')">⬇️ Download PDF</button>
+                
+                <!-- PICK LIST BUTTON MOVED HERE -->
+                <button class="btn btn-navy" id="pick-list-btn" onclick="openPickListModal()" style="background-color: var(--primary); color: white;">📦 Pick List</button>
             </div>
 
             <div class="options-group" style="margin-left: auto;">
-                <label for="sort-strategy">Sort A-Z By:</label>
-                <select id="sort-strategy">
-                    <option value="sku">Product SKU</option>
-                    <option value="buyer">Customer Name / Order ID</option>
-                </select>
+                <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                    <div>
+                        <label for="sort-strategy">Sort A-Z By:</label>
+                        <select id="sort-strategy">
+                            <option value="sku">Product SKU</option>
+                            <option value="buyer">Customer Name / Order ID</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <div id="status">Waiting for cloud initialization...</div>
@@ -611,6 +680,31 @@
     </div>
 
     <div id="labels-container"></div>
+
+    <!-- PICK LIST MODAL OVERLAY -->
+    <div class="picklist-modal-overlay" id="picklist-modal-overlay">
+        <div class="picklist-modal">
+            <div class="picklist-header">
+                <h3>📦 Consolidated Pick List</h3>
+                <button class="btn btn-outline btn-small" onclick="closePickListModal()">✖ Close</button>
+            </div>
+            <div class="picklist-toolbar">
+                <div class="picklist-toggles">
+                    <button id="pl-btn-sku" class="active" onclick="setPickListView('sku')">SKU Wise</button>
+                    <button id="pl-btn-company" onclick="setPickListView('company')">Company Wise</button>
+                </div>
+                <div class="picklist-search">
+                    <input type="text" id="pl-global-search" placeholder="Global Search..." oninput="handlePickListGlobalSearch(event)">
+                </div>
+                <div>
+                    <button class="btn btn-teal btn-small" onclick="downloadPickListExcel()">⬇️ Download Pick List</button>
+                </div>
+            </div>
+            <div class="picklist-body" id="picklist-table-container">
+                <!-- Table injected dynamically -->
+            </div>
+        </div>
+    </div>
 
     <script>
         /* --- UI SETTINGS CONTROLS WITH MEMORY --- */
@@ -737,21 +831,26 @@
         }
 
         async function handleNewUpload(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
 
-            if (window.cloudFiles && window.cloudFiles.some(f => f.name === file.name)) {
-                alert(`Already added! The file "${file.name}" already exists in your history.`);
-                e.target.value = ""; 
-                return;
-            }
-            
-            currentActiveFileName = file.name;
-            await runCoreEngine(file);
+            // Process sequentially to keep memory stable and arrays organized
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (window.cloudFiles && window.cloudFiles.some(f => f.name === file.name)) {
+                    alert(`Skipping "${file.name}" - Already added to your history.`);
+                    continue; 
+                }
+                
+                currentActiveFileName = file.name;
+                await runCoreEngine(file);
 
-            if (typeof window.saveFileToStorage === 'function') {
-                await window.saveFileToStorage(file, temporaryExtractedCompany, processedOrders);
+                if (typeof window.saveFileToStorage === 'function') {
+                    await window.saveFileToStorage(file, temporaryExtractedCompany, processedOrders);
+                }
             }
+            // Reset input after processing all files
+            e.target.value = ""; 
         }
 
         async function downloadCurrentLabels() {
@@ -931,7 +1030,8 @@
 
                         let finalSkuString = "UNKNOWN";
                         let totalQty = 1;
-
+                        let extractedRawItems = []; 
+                        
                         if (skus.length > 0) {
                             let itemBreakdowns = [];
                             totalQty = 0;
@@ -940,23 +1040,40 @@
                                 let q = qtys[i] || "1"; 
                                 itemBreakdowns.push(`${skus[i]} (QTY: ${q})`);
                                 totalQty += parseInt(q, 10) || 1;
+                                extractedRawItems.push({ sku: skus[i], qty: parseInt(q, 10) || 1 });
                             }
                             finalSkuString = itemBreakdowns.join(" | "); 
                         }
 
                         sku = finalSkuString;
                         qty = totalQty.toString();
-                    }
+                        
+                        if(extractedRawItems.length === 0) {
+                            extractedRawItems.push({ sku: sku, qty: parseInt(qty, 10) || 1 });
+                        }
 
-                    processedOrders.push({
-                        pdfDoc: docInst, 
-                        labelPageNum: group.labelPageNum,
-                        buyerName: buyerName,
-                        sku: sku,
-                        qty: qty,
-                        atsplToken: atsplTargetToken,
-                        orderId: orderId
-                    });
+                        processedOrders.push({
+                            pdfDoc: docInst, 
+                            labelPageNum: group.labelPageNum,
+                            buyerName: buyerName,
+                            sku: sku,
+                            qty: qty,
+                            atsplToken: atsplTargetToken,
+                            orderId: orderId,
+                            rawItems: extractedRawItems
+                        });
+                    } else {
+                        processedOrders.push({
+                            pdfDoc: docInst, 
+                            labelPageNum: group.labelPageNum,
+                            buyerName: buyerName,
+                            sku: sku,
+                            qty: qty,
+                            atsplToken: atsplTargetToken,
+                            orderId: orderId,
+                            rawItems: [{ sku: sku, qty: parseInt(qty, 10) || 1 }]
+                        });
+                    }
                 }
 
                 if (!appendMode) {
@@ -1066,6 +1183,30 @@
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
 
+      async function markCurrentFilesAsPrinted() {
+          if (!processedOrders || processedOrders.length === 0) return;
+          let activeOrderIds = [...new Set(processedOrders.map(o => o.orderId))];
+          let docIdsToMark = new Set();
+          
+          window.cloudFiles.forEach(file => {
+              if (file.extractedOrderIds && file.extractedOrderIds.some(id => activeOrderIds.includes(id))) {
+                  docIdsToMark.add(file.id);
+              }
+          });
+          
+          for (const docId of docIdsToMark) {
+              await window.toggleCloudPrintStatus(docId, true);
+              let checkbox = document.querySelector(`.multi-select-pdf[data-docid="${docId}"]`);
+              if (checkbox) {
+                  let wrapper = checkbox.closest('.history-item');
+                  if (wrapper) {
+                      let printCb = wrapper.querySelector('.print-status-wrapper input[type="checkbox"]');
+                      if (printCb) printCb.checked = true;
+                  }
+              }
+          }
+      }
+
       window.handleTopAction = async function(action) {
           if (window.activeSearchQueries && window.activeSearchQueries.length > 0) {
               const queries = window.activeSearchQueries;
@@ -1114,8 +1255,11 @@
 
                   await renderSortedLabels();
 
-                  setTimeout(() => {
-                      if (action === 'print') window.print();
+                  setTimeout(async () => {
+                      if (action === 'print') {
+                          await markCurrentFilesAsPrinted();
+                          window.print();
+                      }
                       else if (action === 'download') downloadCurrentLabels();
                   }, 1000);
 
@@ -1124,7 +1268,10 @@
                   statusEl.textContent = "Error extracting files. Check the console.";
               }
           } else {
-              if (action === 'print') window.print();
+              if (action === 'print') {
+                  await markCurrentFilesAsPrinted();
+                  window.print();
+              }
               else if (action === 'download') downloadCurrentLabels();
           }
       };
@@ -1223,7 +1370,8 @@
                 totalLabels: processedDataArray.length, 
                 chunksCount: numChunks,
                 extractedOrderData: processedDataArray.map(o => `${o.orderId}::${o.labelPageNum}`),
-                extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown")
+                extractedOrderIds: processedDataArray.map(o => o.orderId).filter(id => id !== "Unknown"),
+                pickListData: processedDataArray.map(o => ({ orderId: o.orderId, items: o.rawItems || [] }))
               });
 
               let completedChunks = 0;
@@ -1253,7 +1401,6 @@
         reader.readAsDataURL(file);
       };
 
-      // UPGRADED: NATIVE MULTI-DEVICE REALTIME ENGINE
       window.loadHistoryUI = function() {
         const historyList = document.getElementById('history-list');
         const statusEl = document.getElementById('status');
@@ -1261,7 +1408,6 @@
 
         const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
         
-        // Dynamic live listener across multiple screens simultaneously
         onSnapshot(q, (querySnapshot) => {
             window.cloudFiles = [];
             querySnapshot.forEach((doc) => {
@@ -1270,6 +1416,10 @@
 
             if (typeof calculateSummaryDashboard === 'function' && window.cloudFiles.length > 0) {
                  calculateSummaryDashboard(window.cloudFiles);
+            }
+
+            if (typeof window.updatePickListCache === 'function') {
+                 window.updatePickListCache();
             }
 
             const currentSearch = document.getElementById('order-search-input').value.trim();
@@ -1337,7 +1487,8 @@
 
               await renderSortedLabels();
 
-              setTimeout(() => {
+              setTimeout(async () => {
+                  await markCurrentFilesAsPrinted();
                   window.print();
               }, 1000);
 
@@ -1399,8 +1550,9 @@
             currentActiveFileName = targetFile.name;
             await runCoreEngine(blob);
             
-            setTimeout(() => {
+            setTimeout(async () => {
                 if (action === 'print') {
+                    await markCurrentFilesAsPrinted();
                     window.print();
                 } else if (action === 'download') {
                     downloadCurrentLabels();
@@ -1550,6 +1702,389 @@
       };
 
       window.loadHistoryUI();
+    </script>
+    
+    <!-- PICK LIST JAVASCRIPT ENGINE -->
+    <script>
+        window.pickListState = {
+            isOpen: false,
+            view: 'sku', // 'sku' | 'company'
+            expandedRowId: null,
+            sortCol: 'qty',
+            sortDir: 'desc',
+            filters: {}, 
+            globalSearch: '',
+            rawCache: { skuWise: [], companyWise: [] }
+        };
+
+        window.openPickListModal = function() {
+            document.getElementById('picklist-modal-overlay').style.display = 'flex';
+            window.pickListState.isOpen = true;
+            renderPickListTable();
+        };
+
+        window.closePickListModal = function() {
+            document.getElementById('picklist-modal-overlay').style.display = 'none';
+            window.pickListState.isOpen = false;
+        };
+
+        window.setPickListView = function(viewType) {
+            window.pickListState.view = viewType;
+            window.pickListState.expandedRowId = null; 
+            window.pickListState.filters = {};
+            document.getElementById('pl-btn-sku').classList.toggle('active', viewType === 'sku');
+            document.getElementById('pl-btn-company').classList.toggle('active', viewType === 'company');
+            renderPickListTable();
+        };
+
+        window.handlePickListGlobalSearch = function(e) {
+            window.pickListState.globalSearch = e.target.value.toLowerCase();
+            renderPickListTable();
+        };
+
+        window.handlePickListFilter = function(e) {
+            const col = e.target.dataset.col;
+            window.pickListState.filters[col] = e.target.value;
+            renderPickListTable();
+        };
+
+        window.setPickListSort = function(col) {
+            if (window.pickListState.sortCol === col) {
+                if (window.pickListState.sortDir === 'desc') window.pickListState.sortDir = 'asc';
+                else if (window.pickListState.sortDir === 'asc') window.pickListState.sortDir = null;
+                else window.pickListState.sortDir = 'desc';
+            } else {
+                window.pickListState.sortCol = col;
+                window.pickListState.sortDir = 'desc';
+            }
+            renderPickListTable();
+        };
+
+        window.togglePickListExpand = function(id) {
+            if (window.pickListState.expandedRowId === id) {
+                window.pickListState.expandedRowId = null;
+            } else {
+                window.pickListState.expandedRowId = id;
+            }
+            renderPickListTable();
+        };
+
+        window.updatePickListCache = function() {
+            let skuMap = {};
+            let compMap = {};
+
+            if (window.cloudFiles) {
+                window.cloudFiles.forEach(file => {
+                    let compName = file.companyName || "Unknown Seller";
+                    let pickData = file.pickListData || []; 
+
+                    pickData.forEach(order => {
+                        let orderId = order.orderId;
+                        let items = order.items || [];
+                        
+                        items.forEach(item => {
+                            let s = (item.sku || "UNKNOWN").trim();
+                            if (s.length > 55) s = s.substring(0, 55) + "..."; 
+                            let q = parseInt(item.qty, 10) || 1;
+
+                            // Aggregate SKU Wise
+                            if(!skuMap[s]) skuMap[s] = { sku: s, orders: new Set(), qty: 0, companies: new Set(), compBreakdown: {} };
+                            skuMap[s].orders.add(orderId);
+                            skuMap[s].qty += q;
+                            skuMap[s].companies.add(compName);
+                            
+                            if(!skuMap[s].compBreakdown[compName]) skuMap[s].compBreakdown[compName] = { comp: compName, orders: new Set(), qty: 0 };
+                            skuMap[s].compBreakdown[compName].orders.add(orderId);
+                            skuMap[s].compBreakdown[compName].qty += q;
+
+                            // Aggregate Company Wise
+                            if(!compMap[compName]) compMap[compName] = { comp: compName, skus: new Set(), orders: new Set(), qty: 0, skuBreakdown: {} };
+                            compMap[compName].skus.add(s);
+                            compMap[compName].orders.add(orderId);
+                            compMap[compName].qty += q;
+
+                            if(!compMap[compName].skuBreakdown[s]) compMap[compName].skuBreakdown[s] = { sku: s, orders: new Set(), qty: 0 };
+                            compMap[compName].skuBreakdown[s].orders.add(orderId);
+                            compMap[compName].skuBreakdown[s].qty += q;
+                        });
+                    });
+                });
+            }
+
+            window.pickListState.rawCache.skuWise = Object.values(skuMap).map(v => ({
+                id: v.sku, sku: v.sku, orders: v.orders.size, qty: v.qty, companies: v.companies.size,
+                breakdown: Object.values(v.compBreakdown).map(b => ({ id: b.comp, comp: b.comp, orders: b.orders.size, qty: b.qty }))
+            }));
+
+            window.pickListState.rawCache.companyWise = Object.values(compMap).map(v => ({
+                id: v.comp, comp: v.comp, skus: v.skus.size, orders: v.orders.size, qty: v.qty,
+                breakdown: Object.values(v.skuBreakdown).map(b => ({ id: b.sku, sku: b.sku, orders: b.orders.size, qty: b.qty }))
+            }));
+
+            if(window.pickListState.isOpen) renderPickListTable();
+        };
+
+        function getFilteredAndSortedPickList() {
+            let view = window.pickListState.view;
+            let rawData = view === 'sku' ? window.pickListState.rawCache.skuWise : window.pickListState.rawCache.companyWise;
+            let filters = window.pickListState.filters;
+            let search = window.pickListState.globalSearch;
+
+            // 1. DEEP CLONE: This allows us to filter inside SKUs safely
+            let data = rawData.map(row => ({
+                ...row,
+                breakdown: [...row.breakdown]
+            }));
+
+            // 2. GLOBAL SEARCH: Applies to both the main rows AND the inside SKUs
+            if(search) {
+                data = data.filter(row => {
+                    let parentMatch = Object.values(row).some(v => typeof v !== 'object' && String(v).toLowerCase().includes(search));
+                    
+                    let matchingSubRows = row.breakdown.filter(sub => {
+                        return Object.values(sub).some(v => String(v).toLowerCase().includes(search));
+                    });
+
+                    // If inside SKUs match the search, filter the inside list to ONLY show those!
+                    if (matchingSubRows.length > 0) {
+                        row.breakdown = matchingSubRows; 
+                        return true;
+                    }
+                    
+                    return parentMatch;
+                });
+            }
+
+            // 3. DROPDOWN FILTERS
+            for (let col in filters) {
+                let fVal = filters[col];
+                if(!fVal) continue;
+                data = data.filter(row => String(row[col]) === String(fVal));
+            }
+
+            // 4. SORTING: Main Parent Rows
+            let sc = window.pickListState.sortCol;
+            let sd = window.pickListState.sortDir;
+            if(sc && sd) {
+                data.sort((a,b) => {
+                    let valA = a[sc];
+                    let valB = b[sc];
+                    if(valA < valB) return sd === 'asc' ? -1 : 1;
+                    if(valA > valB) return sd === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+            return data;
+        }
+
+        function getSortIconHtml(col) {
+            if (window.pickListState.sortCol !== col || !window.pickListState.sortDir) return '↕';
+            return window.pickListState.sortDir === 'asc' ? '↑' : '↓';
+        }
+
+        function getFilterDropdown(colKey) {
+            let view = window.pickListState.view;
+            let rawData = view === 'sku' ? window.pickListState.rawCache.skuWise : window.pickListState.rawCache.companyWise;
+            
+            let uniqueVals = [...new Set(rawData.map(r => r[colKey]))].sort((a,b) => {
+                if (typeof a === 'number') return a - b;
+                return String(a).localeCompare(String(b));
+            });
+            
+            let curr = window.pickListState.filters[colKey] || '';
+            let opts = `<option value="">(All)</option>`;
+            uniqueVals.forEach(v => {
+                let sel = String(v) === String(curr) ? 'selected' : '';
+                opts += `<option value="${v}" ${sel}>${v}</option>`;
+            });
+            return `<select class="col-filter-input" data-col="${colKey}" onchange="handlePickListFilter(event)" onclick="event.stopPropagation()">${opts}</select>`;
+        }
+
+        window.renderPickListTable = function() {
+            const container = document.getElementById('picklist-table-container');
+            const view = window.pickListState.view;
+            const data = getFilteredAndSortedPickList();
+            
+            // Dynamic sorter for the INSIDE sub-rows
+            const activeSortCol = window.pickListState.sortCol;
+            const activeSortDir = window.pickListState.sortDir || 'desc';
+            
+            const dynamicSubSorter = (a, b) => {
+                let valA, valB;
+                if (view === 'sku') {
+                    valA = activeSortCol === 'orders' ? a.orders : (activeSortCol === 'qty' ? a.qty : a.comp);
+                    valB = activeSortCol === 'orders' ? b.orders : (activeSortCol === 'qty' ? b.qty : b.comp);
+                } else {
+                    valA = activeSortCol === 'orders' ? a.orders : (activeSortCol === 'qty' ? a.qty : a.sku);
+                    valB = activeSortCol === 'orders' ? b.orders : (activeSortCol === 'qty' ? b.qty : b.sku);
+                }
+                
+                if (valA < valB) return activeSortDir === 'asc' ? -1 : 1;
+                if (valA > valB) return activeSortDir === 'asc' ? 1 : -1;
+                return 0;
+            };
+
+            let html = '<table class="picklist-table" style="width: 100%;">';
+            
+            // HEADERS 
+            if (view === 'sku') {
+                html += `
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('sku')">SKU <span class="sort-indicator">${getSortIconHtml('sku')}</span></div>
+                                    ${getFilterDropdown('sku')}
+                                </div>
+                            </th>
+                            <th style="text-align: center;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('orders')" style="justify-content: center;">Orders <span class="sort-indicator" style="margin-left: 4px;">${getSortIconHtml('orders')}</span></div>
+                                    ${getFilterDropdown('orders')}
+                                </div>
+                            </th>
+                            <th style="text-align: center;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('qty')" style="justify-content: center;">Qty <span class="sort-indicator" style="margin-left: 4px;">${getSortIconHtml('qty')}</span></div>
+                                    ${getFilterDropdown('qty')}
+                                </div>
+                            </th>
+                            <th style="text-align: center;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('companies')" style="justify-content: center;">Companies <span class="sort-indicator" style="margin-left: 4px;">${getSortIconHtml('companies')}</span></div>
+                                    ${getFilterDropdown('companies')}
+                                </div>
+                            </th>
+                        </tr>
+                    </thead><tbody>
+                `;
+            } else {
+                html += `
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('comp')">Company <span class="sort-indicator">${getSortIconHtml('comp')}</span></div>
+                                    ${getFilterDropdown('comp')}
+                                </div>
+                            </th>
+                            <th style="text-align: center;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('skus')" style="justify-content: center;">SKUs <span class="sort-indicator" style="margin-left: 4px;">${getSortIconHtml('skus')}</span></div>
+                                    ${getFilterDropdown('skus')}
+                                </div>
+                            </th>
+                            <th style="text-align: center;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('orders')" style="justify-content: center;">Orders <span class="sort-indicator" style="margin-left: 4px;">${getSortIconHtml('orders')}</span></div>
+                                    ${getFilterDropdown('orders')}
+                                </div>
+                            </th>
+                            <th style="text-align: center;">
+                                <div class="th-inner">
+                                    <div class="th-title" onclick="setPickListSort('qty')" style="justify-content: center;">Qty <span class="sort-indicator" style="margin-left: 4px;">${getSortIconHtml('qty')}</span></div>
+                                    ${getFilterDropdown('qty')}
+                                </div>
+                            </th>
+                        </tr>
+                    </thead><tbody>
+                `;
+            }
+
+            // BODY
+            if (data.length === 0) {
+                html += `<tr><td colspan="4" style="text-align:center; padding: 30px; color: var(--text-muted);">No records found matching filters.</td></tr>`;
+            }
+
+            data.forEach(row => {
+                const isExpanded = window.pickListState.expandedRowId === row.id;
+                const encodedId = encodeURIComponent(row.id);
+                
+                if (view === 'sku') {
+                    html += `<tr data-id="${encodedId}" onclick="togglePickListExpand(decodeURIComponent(this.dataset.id))">
+                        <td style="font-weight: 600; text-align: left;">${isExpanded ? '▼' : '▶'} ${row.sku}</td>
+                        <td style="text-align: center;">${row.orders}</td>
+                        <td style="color: var(--primary); font-weight: 700; text-align: center;">${row.qty}</td>
+                        <td style="text-align: center;">${row.companies}</td>
+                    </tr>`;
+                    
+                    if (isExpanded) {
+                        row.breakdown.sort(dynamicSubSorter).forEach(sub => {
+                            html += `<tr class="expanded-subrow">
+                                <td style="padding-left: 40px; color: var(--text-muted); text-align: left;">└─ ${sub.comp}</td>
+                                <td style="color: var(--text-muted); text-align: center;">${sub.orders}</td>
+                                <td style="color: var(--text-muted); font-weight: 600; text-align: center;">${sub.qty}</td>
+                                <td></td>
+                            </tr>`;
+                        });
+                    }
+                } else {
+                    html += `<tr data-id="${encodedId}" onclick="togglePickListExpand(decodeURIComponent(this.dataset.id))">
+                        <td style="font-weight: 600; text-align: left;">${isExpanded ? '▼' : '▶'} ${row.comp}</td>
+                        <td style="text-align: center;">${row.skus}</td>
+                        <td style="text-align: center;">${row.orders}</td>
+                        <td style="color: var(--primary); font-weight: 700; text-align: center;">${row.qty}</td>
+                    </tr>`;
+                    
+                    if (isExpanded) {
+                        row.breakdown.sort(dynamicSubSorter).forEach(sub => {
+                            html += `<tr class="expanded-subrow">
+                                <td style="padding-left: 40px; color: var(--text-muted); text-align: left;">└─ ${sub.sku}</td>
+                                <td></td>
+                                <td style="color: var(--text-muted); text-align: center;">${sub.orders}</td>
+                                <td style="color: var(--text-muted); font-weight: 600; text-align: center;">${sub.qty}</td>
+                            </tr>`;
+                        });
+                    }
+                }
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        };
+
+        window.downloadPickListExcel = function() {
+            if (typeof XLSX === 'undefined') {
+                alert("Excel library is still loading. Please try again in a moment.");
+                return;
+            }
+            
+            let view = window.pickListState.view;
+            let filteredData = getFilteredAndSortedPickList();
+            let exportArr = [];
+
+            filteredData.forEach(row => {
+                if(view === 'sku') {
+                    exportArr.push({ "SKU": row.sku, "Orders": row.orders, "Qty": row.qty, "Companies": row.companies });
+                    if(window.pickListState.expandedRowId === row.id) {
+                        row.breakdown.sort((a,b) => b.qty - a.qty).forEach(b => {
+                            exportArr.push({ "SKU": "   └─ " + b.comp, "Orders": b.orders, "Qty": b.qty, "Companies": "" });
+                        });
+                    }
+                } else {
+                    exportArr.push({ "Company": row.comp, "SKUs": row.skus, "Orders": row.orders, "Qty": row.qty });
+                    if(window.pickListState.expandedRowId === row.id) {
+                        row.breakdown.sort((a,b) => b.qty - a.qty).forEach(b => {
+                            exportArr.push({ "Company": "   └─ " + b.sku, "SKUs": "", "Orders": b.orders, "Qty": b.qty });
+                        });
+                    }
+                }
+            });
+
+            if (exportArr.length === 0) {
+                alert("No data available to download.");
+                return;
+            }
+
+            let ws = XLSX.utils.json_to_sheet(exportArr);
+            let wscols = Object.keys(exportArr[0]||{}).map(k => ({wch: Math.max(k.length, 25)}));
+            ws['!cols'] = wscols;
+
+            let wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "PickList");
+            let fileName = view === 'sku' ? "PickList_SKU_Wise.xlsx" : "PickList_Company_Wise.xlsx";
+            XLSX.writeFile(wb, fileName);
+        };
     </script>
 </body>
 </html>
