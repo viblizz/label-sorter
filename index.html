@@ -627,6 +627,11 @@
                 
                 <!-- PICK LIST BUTTON MOVED HERE -->
                 <button class="btn btn-navy" id="pick-list-btn" onclick="openPickListModal()" style="background-color: var(--primary); color: white;">📦 Pick List</button>
+                 <!-- PICK LIST BUTTON MOVED HERE -->
+                <button class="btn btn-navy" id="pick-list-btn" onclick="openPickListModal()" style="background-color: var(--primary); color: white;">📦 Pick List</button>
+                
+                <!-- NEW FIX BUTTON -->
+                <button class="btn btn-red" onclick="migrateOldFiles()" style="background-color: #dc3545; color: white;">🛠️ Fix Missing SKUs</button>
             </div>
 
             <div class="options-group" style="margin-left: auto;">
@@ -1607,6 +1612,62 @@
                 statusEl.textContent = "Error executing global delete protocol.";
             }
         }
+      };
+
+        window.migrateOldFiles = async function() {
+          const statusEl = document.getElementById('status');
+          const container = document.getElementById('labels-container');
+          
+          // Find the files that failed to save the Pick List data
+          const filesToFix = window.cloudFiles.filter(f => !f.pickListData || f.pickListData.length === 0);
+          
+          if (filesToFix.length === 0) {
+              alert("✅ All your files are completely up to date! No missing data found.");
+              return;
+          }
+          
+          if (!confirm(`Found ${filesToFix.length} file(s) missing the Pick List SKU data.\n\nClick OK to automatically download them, extract the missing SKUs, and patch your cloud database. (This will not affect your 'Done Printing' status).`)) return;
+
+          try {
+              document.getElementById('print-btn').disabled = true;
+              document.getElementById('download-btn').disabled = true;
+
+              for (let i = 0; i < filesToFix.length; i++) {
+                  const targetFile = filesToFix[i];
+                  statusEl.textContent = `Fixing file ${i + 1} of ${filesToFix.length}: ${targetFile.name}...`;
+
+                  let fullBase64 = "";
+                  if (targetFile.fileData) {
+                      fullBase64 = targetFile.fileData;
+                  } else {
+                      const chunksQuery = query(collection(db, `orders/${targetFile.id}/chunks`), orderBy("index", "asc"));
+                      const chunksSnapshot = await getDocs(chunksQuery);
+                      chunksSnapshot.forEach(d => { fullBase64 += d.data().data; });
+                  }
+
+                  const response = await fetch(fullBase64);
+                  const blob = await response.blob();
+                  
+                  // Run core engine quietly to extract the missing SKUs
+                  await runCoreEngine(blob, false); 
+                  
+                  // Build the missing payload
+                  const newPickData = processedOrders.map(o => ({ orderId: o.orderId, items: o.rawItems || [] }));
+                  
+                  // Patch the database
+                  await updateDoc(doc(db, "orders", targetFile.id), { pickListData: newPickData });
+              }
+              
+              container.innerHTML = ''; 
+              statusEl.textContent = "All files successfully patched!";
+              
+              alert("🎉 All files have been successfully updated!\n\nThey will now appear in your Pick List perfectly.");
+              
+          } catch (err) {
+              console.error(err);
+              statusEl.textContent = "Error fixing files. Check the console.";
+              alert("There was an error updating the files. Check the console for details.");
+          }
       };
 
       window.searchForOrder = function() {
