@@ -582,6 +582,40 @@
             box-sizing: border-box; font-weight: normal; cursor: pointer;
         }
         .sort-indicator { font-size: 0.8em; color: var(--primary); }
+  /* --- EXCEL FILTER & TOTALS BAR STYLES --- */
+        .picklist-totals-bar {
+            display: flex; gap: 20px; font-size: 0.9em; font-weight: 700; color: var(--primary);
+            background: var(--highlight-bg); padding: 8px 15px; border-radius: 6px;
+            border: 1px solid var(--primary-light); align-items: center; margin-left: 15px;
+        }
+        .picklist-totals-bar span { color: var(--text); font-weight: 600; margin-right: 4px; }
+        
+        .pl-ms-dropdown { position: relative; width: 100%; margin-top: 5px; font-weight: normal; }
+        .pl-ms-btn {
+            background: var(--surface); color: var(--text); border: 1px solid var(--border);
+            padding: 5px 8px; font-size: 0.85em; border-radius: 4px; cursor: pointer;
+            text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .pl-ms-btn:hover { border-color: var(--primary); }
+        .pl-ms-content {
+            display: none; position: absolute; top: 100%; left: 0; min-width: 220px;
+            background: var(--surface); border: 1px solid var(--border);
+            box-shadow: 0 4px 15px var(--shadow-color); z-index: 9999; max-height: 250px;
+            flex-direction: column; border-radius: 4px; overflow: hidden;
+        }
+        .pl-ms-content.show { display: flex; }
+        .pl-ms-search {
+            padding: 8px; border: none; border-bottom: 1px solid var(--border); outline: none;
+            width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text); font-size: 0.9em;
+        }
+        .pl-ms-options { overflow-y: auto; padding: 4px 0; }
+        .pl-ms-label {
+            display: block; padding: 6px 10px; cursor: pointer; font-size: 0.85em;
+            color: var(--text); transition: background 0.2s;
+        }
+        .pl-ms-label:hover { background: var(--surface-hover); }
+        .pl-ms-label input { margin-right: 6px; cursor: pointer; }
+    
     </style>
 </head>
 <body data-font="medium">
@@ -681,7 +715,7 @@
 
     <div id="labels-container"></div>
 
-    <!-- PICK LIST MODAL OVERLAY -->
+   <!-- PICK LIST MODAL OVERLAY -->
     <div class="picklist-modal-overlay" id="picklist-modal-overlay">
         <div class="picklist-modal">
             <div class="picklist-header">
@@ -689,11 +723,15 @@
                 <button class="btn btn-outline btn-small" onclick="closePickListModal()">✖ Close</button>
             </div>
             <div class="picklist-toolbar">
-                <div class="picklist-toggles">
-                    <button id="pl-btn-sku" class="active" onclick="setPickListView('sku')">SKU Wise</button>
-                    <button id="pl-btn-company" onclick="setPickListView('company')">Company Wise</button>
+                <div style="display: flex; align-items: center; flex-wrap: wrap;">
+                    <div class="picklist-toggles">
+                        <button id="pl-btn-sku" class="active" onclick="setPickListView('sku')">SKU Wise</button>
+                        <button id="pl-btn-company" onclick="setPickListView('company')">Company Wise</button>
+                    </div>
+                    <!-- NEW TOTALS BAR -->
+                    <div id="picklist-totals" class="picklist-totals-bar"></div>
                 </div>
-                <div class="picklist-search">
+                <div class="picklist-search" style="margin-left: auto; margin-right: 15px;">
                     <input type="text" id="pl-global-search" placeholder="Global Search..." oninput="handlePickListGlobalSearch(event)">
                 </div>
                 <div>
@@ -1768,9 +1806,10 @@
             expandedRowId: null,
             sortCol: 'qty',
             sortDir: 'desc',
-            filters: {}, 
+            filters: {}, // Now holds arrays for multi-select Excel filters
             globalSearch: '',
-            rawCache: { skuWise: [], companyWise: [] }
+            rawCache: { skuWise: [], companyWise: [] },
+            openDropdownId: null // Remembers which Excel filter is currently open
         };
 
         window.openPickListModal = function() {
@@ -1788,6 +1827,7 @@
             window.pickListState.view = viewType;
             window.pickListState.expandedRowId = null; 
             window.pickListState.filters = {};
+            window.pickListState.openDropdownId = null;
             document.getElementById('pl-btn-sku').classList.toggle('active', viewType === 'sku');
             document.getElementById('pl-btn-company').classList.toggle('active', viewType === 'company');
             renderPickListTable();
@@ -1798,9 +1838,57 @@
             renderPickListTable();
         };
 
-        window.handlePickListFilter = function(e) {
-            const col = e.target.dataset.col;
-            window.pickListState.filters[col] = e.target.value;
+        // --- NEW EXCEL MULTI-SELECT FILTER LOGIC ---
+        window.togglePlMS = function(id, event) {
+            event.stopPropagation();
+            let el = document.getElementById(id);
+            if (el && el.classList.contains('show')) {
+                el.classList.remove('show');
+                window.pickListState.openDropdownId = null;
+            } else {
+                document.querySelectorAll('.pl-ms-content.show').forEach(e => e.classList.remove('show'));
+                if(el) el.classList.add('show');
+                window.pickListState.openDropdownId = id;
+            }
+        };
+
+        // Close dropdowns if clicking anywhere outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.pl-ms-dropdown')) {
+                document.querySelectorAll('.pl-ms-content.show').forEach(el => el.classList.remove('show'));
+                window.pickListState.openDropdownId = null;
+            }
+        });
+
+        window.filterPlMSLocal = function(input) {
+            const filter = input.value.toLowerCase();
+            const labels = input.closest('.pl-ms-content').querySelectorAll('.pl-ms-label');
+            labels.forEach(label => {
+                const txt = label.textContent || label.innerText;
+                label.style.display = txt.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+            });
+        };
+
+        window.clearPlFilter = function(colKey, event) {
+            event.stopPropagation();
+            window.pickListState.filters[colKey] = [];
+            renderPickListTable();
+        };
+
+        window.handlePickListFilter = function(e, colKey) {
+            let val = e.target.value;
+            if (!window.pickListState.filters[colKey]) {
+                window.pickListState.filters[colKey] = [];
+            }
+            
+            let activeFilters = window.pickListState.filters[colKey];
+            
+            if (e.target.checked) {
+                if (!activeFilters.includes(val)) activeFilters.push(val);
+            } else {
+                activeFilters = activeFilters.filter(v => v !== val);
+            }
+            window.pickListState.filters[colKey] = activeFilters;
             renderPickListTable();
         };
 
@@ -1892,7 +1980,7 @@
                 breakdown: [...row.breakdown]
             }));
 
-            // 2. GLOBAL SEARCH: Applies to both the main rows AND the inside SKUs
+            // 2. GLOBAL SEARCH
             if(search) {
                 data = data.filter(row => {
                     let parentMatch = Object.values(row).some(v => typeof v !== 'object' && String(v).toLowerCase().includes(search));
@@ -1901,7 +1989,6 @@
                         return Object.values(sub).some(v => String(v).toLowerCase().includes(search));
                     });
 
-                    // If inside SKUs match the search, filter the inside list to ONLY show those!
                     if (matchingSubRows.length > 0) {
                         row.breakdown = matchingSubRows; 
                         return true;
@@ -1911,11 +1998,11 @@
                 });
             }
 
-            // 3. DROPDOWN FILTERS
+            // 3. EXCEL MULTI-SELECT FILTERS
             for (let col in filters) {
-                let fVal = filters[col];
-                if(!fVal) continue;
-                data = data.filter(row => String(row[col]) === String(fVal));
+                let activeFiltersArr = filters[col];
+                if (!activeFiltersArr || activeFiltersArr.length === 0) continue;
+                data = data.filter(row => activeFiltersArr.includes(String(row[col])));
             }
 
             // 4. SORTING: Main Parent Rows
@@ -1947,19 +2034,52 @@
                 return String(a).localeCompare(String(b));
             });
             
-            let curr = window.pickListState.filters[colKey] || '';
-            let opts = `<option value="">(All)</option>`;
-            uniqueVals.forEach(v => {
-                let sel = String(v) === String(curr) ? 'selected' : '';
-                opts += `<option value="${v}" ${sel}>${v}</option>`;
-            });
-            return `<select class="col-filter-input" data-col="${colKey}" onchange="handlePickListFilter(event)" onclick="event.stopPropagation()">${opts}</select>`;
+            let activeFilters = window.pickListState.filters[colKey] || [];
+            let btnText = activeFilters.length > 0 ? `Filtered (${activeFilters.length})` : '(All)';
+            
+            let optsHtml = uniqueVals.map(v => {
+                let isChecked = activeFilters.includes(String(v)) ? 'checked' : '';
+                let safeVal = String(v).replace(/"/g, '&quot;');
+                return `<label class="pl-ms-label"><input type="checkbox" value="${safeVal}" onchange="handlePickListFilter(event, '${colKey}')" ${isChecked}> ${v}</label>`;
+            }).join('');
+            
+            return `
+                <div class="pl-ms-dropdown">
+                    <div class="pl-ms-btn" onclick="togglePlMS('pl-ms-${colKey}', event)">${btnText} ▼</div>
+                    <div class="pl-ms-content" id="pl-ms-${colKey}">
+                        <input type="text" class="pl-ms-search" placeholder="Search..." onkeyup="filterPlMSLocal(this)" onclick="event.stopPropagation()">
+                        <div style="padding: 6px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 11px;">
+                            <span style="color: var(--primary); cursor: pointer; font-weight: bold;" onclick="clearPlFilter('${colKey}', event)">Clear Filter</span>
+                        </div>
+                        <div class="pl-ms-options">
+                            ${optsHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         window.renderPickListTable = function() {
             const container = document.getElementById('picklist-table-container');
             const view = window.pickListState.view;
             const data = getFilteredAndSortedPickList();
+            
+            // --- UPDATE LIVE TOTALS BAR ---
+            let tOrders = 0;
+            let tQty = 0;
+            data.forEach(r => {
+                tOrders += parseInt(r.orders) || 0;
+                tQty += parseInt(r.qty) || 0;
+            });
+            
+            let uniqueCount = data.length;
+            let typeLabel = view === 'sku' ? 'SKUs' : 'Companies';
+            
+            document.getElementById('picklist-totals').innerHTML = `
+                <div><span>Total ${typeLabel}:</span> ${uniqueCount}</div>
+                <div><span>Total Orders:</span> ${tOrders}</div>
+                <div><span>Total Qty:</span> ${tQty}</div>
+            `;
             
             // Dynamic sorter for the INSIDE sub-rows
             const activeSortCol = window.pickListState.sortCol;
@@ -1987,7 +2107,7 @@
                 html += `
                     <thead>
                         <tr>
-                            <th style="text-align: left;">
+                            <th style="text-align: left; width: 45%;">
                                 <div class="th-inner">
                                     <div class="th-title" onclick="setPickListSort('sku')">SKU <span class="sort-indicator">${getSortIconHtml('sku')}</span></div>
                                     ${getFilterDropdown('sku')}
@@ -2018,7 +2138,7 @@
                 html += `
                     <thead>
                         <tr>
-                            <th style="text-align: left;">
+                            <th style="text-align: left; width: 45%;">
                                 <div class="th-inner">
                                     <div class="th-title" onclick="setPickListSort('comp')">Company <span class="sort-indicator">${getSortIconHtml('comp')}</span></div>
                                     ${getFilterDropdown('comp')}
@@ -2097,6 +2217,12 @@
 
             html += '</tbody></table>';
             container.innerHTML = html;
+
+            // Keeps the Excel filter dropdown open if you were clicking checkboxes inside it
+            if (window.pickListState.openDropdownId) {
+                let el = document.getElementById(window.pickListState.openDropdownId);
+                if (el) el.classList.add('show');
+            }
         };
 
         window.downloadPickListExcel = function() {
